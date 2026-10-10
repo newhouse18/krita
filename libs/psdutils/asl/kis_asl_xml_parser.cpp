@@ -106,6 +106,15 @@ KoColor parseColorObject(QDomElement parent, QString classID)
                     color.data()[1] = value;
                 } else if (key == "Bl  ") {
                     color.data()[0] = value;
+                } else if (key == "redFloat") {
+                    // CONCEPTFORGE: newer Photoshop writes the colour components of some effects
+                    // (for example the Bevel & Emboss highlight and shadow) as 0..1 floats under
+                    // these keys. Before, they were rejected and the colour became red. See patch 11.
+                    color.data()[2] = quint8(qBound(0.0, value, 1.0) * 255.0 + 0.5);
+                } else if (key == "greenFloat") {
+                    color.data()[1] = quint8(qBound(0.0, value, 1.0) * 255.0 + 0.5);
+                } else if (key == "blueFloat") {
+                    color.data()[0] = quint8(qBound(0.0, value, 1.0) * 255.0 + 0.5);
                 } else {
                     warnKrita << "Unknown color key value double:" << ppVar(key);
                     return error;

@@ -807,8 +807,25 @@ bool KisAslLayerStyleSerializer::saveToFile(const QString& filename)
     return true;
 }
 
-void convertAndSetBlendMode(const QString &mode, std::function<void(const QString &)> setBlendMode)
+// CONCEPTFORGE: newer Photoshop writes some blend modes (for example the Bevel & Emboss
+// highlight and shadow) as long names such as "screen" and "multiply" instead of the
+// four-letter codes. Unknown names used to become Normal. See app/PATCHES.md, patch 11.
+static QString normalizeBlendModeName(const QString &mode)
 {
+    static const QHash<QString, QString> longNames = {
+        {"normal", "Nrml"},       {"dissolve", "Dslv"},       {"darken", "Drkn"},
+        {"multiply", "Mltp"},     {"colorBurn", "CBrn"},      {"lighten", "Lghn"},
+        {"screen", "Scrn"},       {"colorDodge", "CDdg"},     {"overlay", "Ovrl"},
+        {"softLight", "SftL"},    {"hardLight", "HrdL"},      {"difference", "Dfrn"},
+        {"exclusion", "Xclu"},    {"subtract", "Sbtr"},       {"hue", "H   "},
+        {"saturation", "Strt"},   {"color", "Clr "},          {"luminosity", "Lmns"},
+    };
+    return longNames.value(mode, mode);
+}
+
+void convertAndSetBlendMode(const QString &modeName, std::function<void(const QString &)> setBlendMode)
+{
+    const QString mode = normalizeBlendModeName(modeName);
     QString compositeOp = COMPOSITE_OVER;
 
     if (mode == "Nrml") {

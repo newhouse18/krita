@@ -325,7 +325,11 @@ bool PSDLayerRecord::readImpl(QIODevice &io)
             layerMask.positionedRelativeToLayer = (flags & 1) != 0;
             layerMask.disabled = (flags & 2) != 0;
             layerMask.invertLayerMaskWhenBlending = (flags & 4) != 0;
-            const bool hasMaskParameters = (flags & 8) != 0;
+            // CONCEPTFORGE: the "mask parameters follow" flag is bit 4 (value 16) in Adobe's
+            // specification. Bit 3 (value 8) only says the user mask was rendered from other
+            // data, which Photoshop sets for a vector mask; reading it as "parameters follow"
+            // consumed an extra byte and made the whole file fail to parse. See app/PATCHES.md, patch 8.
+            const bool hasMaskParameters = (flags & 16) != 0;
 
             dbgFile << "\tLayer mask info (original): position relative" << layerMask.positionedRelativeToLayer
                     << ", disabled" << layerMask.disabled << ", invert" << layerMask.invertLayerMaskWhenBlending
