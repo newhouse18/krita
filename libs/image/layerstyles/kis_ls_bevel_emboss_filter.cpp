@@ -114,20 +114,34 @@ private:
     qreal m_contrast;
 };
 
+// CONCEPTFORGE: patch 12. The bump map gives flat ground the value of the light's height
+// (sin(altitude) * 255), not a fixed 127. Highlights and shadows are what is above and below
+// that "neutral" value, so a flat area (the inside of a shape) is left unchanged, as in
+// Photoshop. The split was a constant 127, which is right only for an altitude of 30 degrees.
 struct HighlightsFetchOp {
-    static const bool supportsCaching = true;
+    static const bool supportsCaching = false;
+
+    explicit HighlightsFetchOp(int neutral = 127) : m_neutral(neutral) {}
 
     int operator() (int value) {
-        return qRound(qMax(0, value - 127) * (255.0 / (255 - 127)));
+        return qRound(qMax(0, value - m_neutral) * (255.0 / (255 - m_neutral)));
     }
+
+private:
+    int m_neutral;
 };
 
 struct ShadowsFetchOp {
-    static const bool supportsCaching = true;
+    static const bool supportsCaching = false;
+
+    explicit ShadowsFetchOp(int neutral = 127) : m_neutral(neutral) {}
 
     int operator() (int value) {
-        return 255 - qRound(qMin(value, 127) * (255.0 / 127.0));
+        return 255 - qRound(qMin(value, m_neutral) * (255.0 / m_neutral));
     }
+
+private:
+    int m_neutral;
 };
 
 template <class MapOp>
@@ -388,7 +402,11 @@ void KisLsBevelEmbossFilter::applyBevelEmboss(KisPaintDeviceSP srcDevice,
     bmvals.elevation = config->altitude();
     bmvals.depth = config->depth();
     bmvals.ambient = 0;
-    bmvals.compensate = true;
+    // CONCEPTFORGE: patch 12. "Compensate" scales the shading so flat ground is white (254),
+    // which made every flat area count as a strong highlight. Without it flat ground keeps the
+    // light's height value, which is the neutral value used below.
+    bmvals.compensate = false;
+    const int neutral = qBound(1, int(std::sin(qreal(config->altitude()) * M_PI / 180.0) * 255.0), 254);
     bmvals.invert = config->direction() == psd_direction_down;
     bmvals.type = LINEAR;
 
@@ -417,16 +435,18 @@ void KisLsBevelEmbossFilter::applyBevelEmboss(KisPaintDeviceSP srcDevice,
 
     selection->clear();
     mapPixelValues(bumpmapSelection, selection,
-                   ShadowsFetchOp(), d.shadowHighlightsFinalRect);
+                   ShadowsFetchOp(neutral), d.shadowHighlightsFinalRect);
     selection->applySelection(limitingSelection, SELECTION_INTERSECT);
 
     //dstDevice->convertToQImage(0, QRect(0,0,300,300)).save("4_dst_before_apply.png");
     //selection->convertToQImage(0, QRect(0,0,300,300)).save("4_shadows_sel.png");
 
     {
+        // CONCEPTFORGE: patch 12. The opacity is a percent here but 0..255 for the projection;
+        // every other layer effect converts it (see KisLsUtils), the bevel passed 50 as 50/255.
         KisPaintDeviceSP dstDevice = dst->getProjection("00_bevel_shadow",
                                                         config->shadowBlendMode(),
-                                                        config->shadowOpacity(),
+                                                        quint8(qRound(255.0 / 100.0 * config->shadowOpacity())),
                                                         QBitArray(),
                                                         srcDevice);
 
@@ -442,7 +462,7 @@ void KisLsBevelEmbossFilter::applyBevelEmboss(KisPaintDeviceSP srcDevice,
 
     selection->clear();
     mapPixelValues(bumpmapSelection, selection,
-                   HighlightsFetchOp(), d.shadowHighlightsFinalRect);
+                   HighlightsFetchOp(neutral), d.shadowHighlightsFinalRect);
     selection->applySelection(limitingSelection, SELECTION_INTERSECT);
 
     //selection->convertToQImage(0, QRect(0,0,300,300)).save("5_highlights_sel.png");
@@ -450,7 +470,7 @@ void KisLsBevelEmbossFilter::applyBevelEmboss(KisPaintDeviceSP srcDevice,
     {
         KisPaintDeviceSP dstDevice = dst->getProjection("01_bevel_highlight",
                                                         config->highlightBlendMode(),
-                                                        config->highlightOpacity(),
+                                                        quint8(qRound(255.0 / 100.0 * config->highlightOpacity())),
                                                         QBitArray(),
                                                         srcDevice);
 
