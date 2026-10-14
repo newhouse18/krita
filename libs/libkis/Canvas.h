@@ -57,6 +57,21 @@ public Q_SLOTS:
      */
     void pan(const QPoint& offset);
 
+    // CONCEPTFORGE: patch 13. preferredCenter() is wrong whenever the canvas is rotated (it is a
+    // fraction of the scrollable area in rotated space, converted back as if the view were not
+    // rotated). These two map points through Krita's own image/widget transform instead, so a
+    // plugin can draw on the canvas in the right place at any zoom, pan, rotation and mirroring.
+    /**
+     * @brief eturn where the image pixel at \p imagePos is on the canvas widget, in widget
+     * (device independent) pixels, with the current zoom, pan, rotation and mirroring.
+     */
+    QPointF imageToWidget(const QPointF &imagePos) const;
+
+    /**
+     * @brief eturn the image position under the canvas widget point \p widgetPos.
+     */
+    QPointF widgetToImage(const QPointF &widgetPos) const;
+
     /**
      * @brief resetZoom set the zoomlevel to 100%
      */

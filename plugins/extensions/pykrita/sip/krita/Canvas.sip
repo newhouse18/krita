@@ -25,6 +25,9 @@ public Q_SLOTS:
     QPointF preferredCenter() const;
     void setPreferredCenter(const QPointF& imagePos);
     void pan(const QPoint& offset);
+    // CONCEPTFORGE: patch 13
+    QPointF imageToWidget(const QPointF &imagePos) const;
+    QPointF widgetToImage(const QPointF &widgetPos) const;
     void resetZoom();
     void resetRotation();
     qreal rotation() const;

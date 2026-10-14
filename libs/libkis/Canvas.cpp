@@ -78,6 +78,19 @@ QPointF Canvas::preferredCenter() const
     return imagePos; 
 }
 
+// CONCEPTFORGE: patch 13, see Canvas.h
+QPointF Canvas::imageToWidget(const QPointF &imagePos) const
+{
+    if (!d->canvas) return QPointF();
+    return d->canvas->coordinatesConverter()->imageToWidget(imagePos);
+}
+
+QPointF Canvas::widgetToImage(const QPointF &widgetPos) const
+{
+    if (!d->canvas) return QPointF();
+    return d->canvas->coordinatesConverter()->widgetToImage(widgetPos);
+}
+
 void Canvas::pan(const QPoint& offset)
 {
     d->canvas->imageView()->canvasController()->pan(offset);
