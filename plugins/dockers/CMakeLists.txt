@@ -32,3 +32,8 @@ add_subdirectory(storyboarddocker)
 add_subdirectory(widegamutcolorselector)
 add_subdirectory(brushhud)
 add_subdirectory(textproperties)
+
+# CONCEPTFORGE: build Concept Forge's own dockers (new files outside this tree) when CONCEPTFORGE_DIR is set
+if(CONCEPTFORGE_DIR)
+    add_subdirectory(${CONCEPTFORGE_DIR}/dockers ${CMAKE_CURRENT_BINARY_DIR}/conceptforge_dockers)
+endif()
