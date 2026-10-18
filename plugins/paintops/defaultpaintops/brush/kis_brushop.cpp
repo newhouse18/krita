@@ -66,13 +66,15 @@ KisBrushOp::KisBrushOp(const KisPaintOpSettingsSP settings, KisPainter *painter,
     Q_UNUSED(image);
     Q_ASSERT(settings);
 
+    m_cf = CfBrushExtras::Extras::read(settings.data());  // CONCEPTFORGE: patches 15, 16
+
     m_airbrushData.read(settings.data());
     m_rotationOption.applyFanCornersInfo(this);
 
     m_precisionOption.setHasImprecisePositionOptions(
         m_precisionOption.hasImprecisePositionOptions()
         || m_scatterOption.isChecked() || m_rotationOption.isChecked()
-        || m_airbrushData.isChecked);
+        || m_airbrushData.isChecked || m_cf.scatterCount > 1);  // CONCEPTFORGE: patch 15
 
     m_brush->notifyBrushIsGoingToBeClonedForStroke();
 
@@ -100,8 +102,12 @@ KisBrushOp::~KisBrushOp()
 {
 }
 
-KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& info)
+KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
 {
+    // CONCEPTFORGE: Brush Pose replaces what the pen reports (patch 16)
+    KisPaintInformation info = infoIn;
+    if (m_cf.hasPose()) m_cf.applyPose(info);
+
     if (!painter()->device()) return KisSpacingInformation(1.0);
 
     KisBrushSP brush = m_brush;
@@ -120,24 +126,29 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& info)
     qreal ratio = m_ratioOption.apply(info);
 
     KisDabShape shape(scale, ratio, rotation);
-    QPointF cursorPos =
-        m_scatterOption.apply(info,
-                              brush->maskWidth(shape, 0, 0, info),
-                              brush->maskHeight(shape, 0, 0, info));
 
     qreal dabOpacity = OPACITY_OPAQUE_F;
     qreal dabFlow = OPACITY_OPAQUE_F;
 
     m_opacityOption.apply(info, &dabOpacity, &dabFlow);
 
-    KisDabCacheUtils::DabRequestInfo request(painter()->paintColor(),
-                                             cursorPos,
-                                             shape,
-                                             info,
-                                             m_softnessOption.apply(info),
-                                             m_lightnessStrengthOption.apply(info));
+    // CONCEPTFORGE: Scatter count: several marks per dab, each scattered on its own (patch 15)
+    const int cfCount = m_cf.countFor(info);
+    for (int cfMark = 0; cfMark < cfCount; ++cfMark) {
+        const QPointF cursorPos =
+            m_scatterOption.apply(info,
+                                  brush->maskWidth(shape, 0, 0, info),
+                                  brush->maskHeight(shape, 0, 0, info));
 
-    m_dabExecutor->addDab(request, dabOpacity, dabFlow);
+        KisDabCacheUtils::DabRequestInfo request(painter()->paintColor(),
+                                                 cursorPos,
+                                                 shape,
+                                                 info,
+                                                 m_softnessOption.apply(info),
+                                                 m_lightnessStrengthOption.apply(info));
+
+        m_dabExecutor->addDab(request, dabOpacity, dabFlow);
+    }
 
 
     KisSpacingInformation spacingInfo =

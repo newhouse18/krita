@@ -18,6 +18,7 @@
 #include "KisDarkenOption.h"
 #include "KisHSVOption.h"
 #include "kis_texture_option.h"
+#include <CfBrushExtras.h>
 #include "kis_painter.h"
 #include "kis_paintop_settings.h"
 
@@ -43,6 +44,7 @@ KisBrushOpResources::KisBrushOpResources(const KisPaintOpSettingsSP settings, Ki
     colorSource.reset(colorSourceOption.createColorSource(painter));
 
     sharpnessOption.reset(new KisSharpnessOption(settings.data()));
+    cfNoise = CfBrushExtras::Extras::read(settings.data()).noise;  // CONCEPTFORGE: patch 17
 
     textureOption.reset(new KisTextureOption(settings.data(),
                                              settings->resourcesInterface(),

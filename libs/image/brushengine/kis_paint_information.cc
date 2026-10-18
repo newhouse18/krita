@@ -366,6 +366,22 @@ void KisPaintInformation::setPressure(qreal p)
     d->pressure = p;
 }
 
+// CONCEPTFORGE: Brush Pose overrides (patch 16)
+void KisPaintInformation::setXTilt(qreal value)
+{
+    d->xTilt = value;
+}
+
+void KisPaintInformation::setYTilt(qreal value)
+{
+    d->yTilt = value;
+}
+
+void KisPaintInformation::setRotation(qreal value)
+{
+    d->rotation = value;
+}
+
 qreal KisPaintInformation::xTilt() const
 {
     return d->xTilt;

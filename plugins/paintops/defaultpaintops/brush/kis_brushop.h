@@ -15,6 +15,7 @@
 #include <kis_brush_based_paintop_settings.h>
 #include <KisStandardOptions.h>
 #include <KisAirbrushOptionData.h>
+#include <CfBrushExtras.h>
 #include <KisSpacingOption.h>
 #include <KisScatterOption.h>
 #include <KisSharpnessOption.h>
@@ -61,6 +62,7 @@ protected:
 
 
 private:
+    CfBrushExtras::Extras m_cf;  // CONCEPTFORGE: scatter count, brush pose (patches 15, 16)
     KisAirbrushOptionData m_airbrushData;
 
     KisSizeOption m_sizeOption;

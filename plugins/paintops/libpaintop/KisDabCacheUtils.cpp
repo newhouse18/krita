@@ -13,6 +13,7 @@
 
 #include <KisSharpnessOption.h>
 #include <kis_texture_option.h>
+#include "CfBrushExtras.h"
 
 #include <kundo2command.h>
 
@@ -101,6 +102,13 @@ void postProcessDab(KisFixedPaintDeviceSP dab,
 
     if (resources->textureOption) {
         resources->textureOption->apply(dab, dabTopLeft, info);
+    }
+
+    // CONCEPTFORGE: Noise (patch 17)
+    if (resources->cfNoise > 0.0) {
+        CfBrushExtras::Extras extras;
+        extras.noise = resources->cfNoise;
+        extras.applyNoise(dab);
     }
 }
 

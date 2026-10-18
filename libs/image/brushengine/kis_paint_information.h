@@ -125,6 +125,11 @@ public:
     /// Set the pressure
     void setPressure(qreal p);
 
+    // CONCEPTFORGE: Photoshop's Brush Pose overrides the tilt and rotation the pen reports (patch 16)
+    void setXTilt(qreal value);
+    void setYTilt(qreal value);
+    void setRotation(qreal value);
+
     /// The tilt of the pen on the horizontal axis (from 0.0 to 1.0)
     qreal xTilt() const;
 
