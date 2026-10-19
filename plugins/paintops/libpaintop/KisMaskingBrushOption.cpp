@@ -174,6 +174,10 @@ struct KisMaskingBrushOption::Private
             const QString name = KoCompositeOpRegistry::instance().getKoID(id).name();
             compositeSelector->addItem(name, id);
         }
+        // CONCEPTFORGE: patch 24. The masked brush implements the Height modes, but its list did not offer them: a preset
+        // that uses one (Photoshop's Linear Height second tip) made this list assert when its mode was shown.
+        compositeSelector->addItem(i18n("Height (Photoshop)"), QStringLiteral("height_photoshop"));
+        compositeSelector->addItem(i18n("Linear Height (Photoshop)"), QStringLiteral("linear_height_photoshop"));
         compositeSelector->setCurrentIndex(0);
 
         QHBoxLayout *compositeOpLayout = new QHBoxLayout();

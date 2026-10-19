@@ -1433,9 +1433,24 @@ void KisPaintopBox::slotGuiChangedCurrentPreset() // Called only when UI is chan
         // some of the options add the values incrementally
         // (e.g. KisPaintOpUtils::RequiredBrushFilesListTag), therefore they
         // may add up if we pass the same preset multiple times
+        // CONCEPTFORGE: patch 25. The option widgets know nothing of the "Cf/" settings (Photoshop's brush features that
+        // this fork adds to the pixel brush), so resetting and writing from the widgets lost them: a Photoshop brush
+        // came out of selecting it with none of them. They are kept across the write.
+        QMap<QString, QVariant> cfSettings;
+        {
+            const QMap<QString, QVariant> all = preset->settings()->getProperties();
+            for (auto it = all.constBegin(); it != all.constEnd(); ++it) {
+                if (it.key().contains(QLatin1String("Cf/"))) cfSettings.insert(it.key(), it.value());
+            }
+        }
+
         preset->settings()->resetSettings();
 
         m_presetsEditor->writeOptionSetting(const_cast<KisPaintOpSettings*>(preset->settings().data()));
+
+        for (auto it = cfSettings.constBegin(); it != cfSettings.constEnd(); ++it) {
+            if (!preset->settings()->hasProperty(it.key())) preset->settings()->setProperty(it.key(), it.value());
+        }
     }
 
     // we should also update the preset strip to update the status of the "dirty" mark
