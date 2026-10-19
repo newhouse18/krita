@@ -6,6 +6,9 @@
 //   Cf/ScatterCount, Cf/ScatterCountJitter     Photoshop's Scattering "Count" and "Count Jitter"
 //   Cf/Pose/{TiltX,TiltY,Rotation,Pressure}    Photoshop's Brush Pose overrides; each with a Cf/Pose/Override... flag
 //   Cf/Noise                                   Photoshop's Noise: random loss of alpha in every dab (0 to 1)
+//   Cf/TipRoundness                            roundness (0 to 1) of a picture tip, which Krita's own tip settings lack (patch 23)
+//   Cf/AngleJitter                             Photoshop's Angle Jitter: a random turn added to whatever the angle control gives
+//   Cf/ScatterCountControl, Cf/ScatterCountSteps   what the Scattering "Count" follows (pressure, fade, ...)
 #ifndef CF_BRUSH_EXTRAS_H
 #define CF_BRUSH_EXTRAS_H
 
@@ -28,6 +31,10 @@ struct Extras
     double tiltX {0.0}, tiltY {0.0}, rotation {0.0}, pressure {1.0};
     double noise {0.0};
     double wetEdges {0.0};  // 0 to 1, patch 18 (the stroke-level work is in KisIndirectPaintingSupport)
+    double tipRoundness {1.0};   // patch 23
+    double angleJitter {0.0};    // 0 to 1: a turn of up to +-180 degrees times this, added to the angle (patch 23)
+    QString countControl;        // "", pressure, tangentialpressure, tiltelevation, rotation, drawingangle, fade
+    int countSteps {25};         // the steps of the fade control
 
     static Extras read(const KisPropertiesConfiguration *s)
     {
@@ -45,6 +52,10 @@ struct Extras
         e.pressure = s->getDouble("Cf/Pose/Pressure", 1.0);
         e.noise = qBound(0.0, s->getDouble("Cf/Noise", 0.0), 1.0);
         e.wetEdges = qBound(0.0, s->getDouble("Cf/WetEdges", 0.0), 1.0);
+        e.tipRoundness = qBound(0.01, s->getDouble("Cf/TipRoundness", 1.0), 1.0);
+        e.angleJitter = qBound(0.0, s->getDouble("Cf/AngleJitter", 0.0), 1.0);
+        e.countControl = s->getString("Cf/ScatterCountControl", QString());
+        e.countSteps = qMax(1, s->getInt("Cf/ScatterCountSteps", 25));
         return e;
     }
 
@@ -63,9 +74,31 @@ struct Extras
     int countFor(const KisPaintInformation &info) const
     {
         if (scatterCount <= 1) return 1;
-        if (scatterCountJitter <= 0.0) return scatterCount;
+        qreal count = scatterCount;
+        if (!countControl.isEmpty()) count = qMax(1.0, count * controlValue(info));
+        if (scatterCountJitter <= 0.0) return qMax(1, qRound(count));
         const qreal r = info.randomSource()->generateNormalized();
-        return qMax(1, qRound(scatterCount * (1.0 - scatterCountJitter * r)));
+        return qMax(1, qRound(count * (1.0 - scatterCountJitter * r)));
+    }
+
+    // 0 to 1: how far the count's control is turned up (patch 23)
+    qreal controlValue(const KisPaintInformation &info) const
+    {
+        if (info.isHoveringMode()) return 1.0;
+        if (countControl == QLatin1String("pressure")) return info.pressure();
+        if (countControl == QLatin1String("tangentialpressure")) return info.tangentialPressure();
+        if (countControl == QLatin1String("tiltelevation")) return KisPaintInformation::tiltElevation(info, 60.0, 60.0, true);
+        if (countControl == QLatin1String("rotation")) return qBound(0.0, info.rotation() / 360.0, 1.0);
+        if (countControl == QLatin1String("drawingangle")) return qBound(0.0, info.drawingAngle() / (2.0 * M_PI) + 0.5, 1.0);
+        if (countControl == QLatin1String("fade")) return qBound(0.0, 1.0 - qreal(info.currentDabSeqNo()) / countSteps, 1.0);
+        return 1.0;
+    }
+
+    // Angle Jitter: a random turn on top of the angle (radians)
+    qreal angleJitterFor(const KisPaintInformation &info) const
+    {
+        if (angleJitter <= 0.0) return 0.0;
+        return (2.0 * info.randomSource()->generateNormalized() - 1.0) * angleJitter * M_PI;
     }
 
     // Noise: every pixel of the dab loses a random share of its opacity.

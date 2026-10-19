@@ -126,7 +126,8 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
     if (checkSizeTooSmall(scale)) return KisSpacingInformation();
 
     qreal rotation = m_rotationOption.apply(info);
-    qreal ratio = m_ratioOption.apply(info);
+    rotation += m_cf.angleJitterFor(info);  // CONCEPTFORGE: patch 23
+    qreal ratio = m_ratioOption.apply(info) * m_cf.tipRoundness;  // CONCEPTFORGE: patch 23
 
     KisDabShape shape(scale, ratio, rotation);
 
