@@ -285,6 +285,16 @@ void KisPainterBasedStrokeStrategy::initStrokeCallback()
                 indirect->setTemporaryOpacity(m_resources->opacity());
                 indirect->setTemporarySelection(selection);
 
+                // CONCEPTFORGE: Wet Edges is a property of the whole stroke, made when it is composed (patch 18)
+                if (m_resources->currentPaintOpPreset()) {
+                    KisPaintOpSettingsSP cfSettings = m_resources->currentPaintOpPreset()->settings();
+                    const qreal cfWet = cfSettings->getDouble("Cf/WetEdges", 0.0);
+                    indirect->setTemporaryWetEdges(cfWet > 0.0 ? cfWet : 0.0,
+                                                   qBound(1.5, 0.2 * cfSettings->paintOpSize(), 40.0));
+                } else {
+                    indirect->setTemporaryWetEdges(0.0, 0.0);
+                }
+
                 QBitArray channelLockFlags = m_resources->channelLockFlags();
                 indirect->setTemporaryChannelFlags(channelLockFlags);
             }

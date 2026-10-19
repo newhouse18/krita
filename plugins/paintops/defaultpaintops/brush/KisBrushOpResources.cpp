@@ -34,6 +34,8 @@ struct KisBrushOpResources::Private
     KoColorTransformation *hsvTransformation = 0;
     KisMixOption mixOption;
     KisDarkenOption darkenOption;
+    qreal cfPurity {0.0};  // CONCEPTFORGE: Photoshop's Purity, -1 to 1 (patch 21)
+    KoColorTransformation *cfPurityTransformation {nullptr};
 };
 
 
@@ -44,6 +46,11 @@ KisBrushOpResources::KisBrushOpResources(const KisPaintOpSettingsSP settings, Ki
     colorSource.reset(colorSourceOption.createColorSource(painter));
 
     sharpnessOption.reset(new KisSharpnessOption(settings.data()));
+    m_d->cfPurity = qBound(-1.0, settings->getDouble("Cf/Purity", 0.0), 1.0);
+    if (m_d->cfPurity != 0.0) {
+        m_d->cfPurityTransformation =
+            painter->backgroundColor().colorSpace()->createColorTransformation("hsv_adjustment", QHash<QString, QVariant>());
+    }
     cfNoise = CfBrushExtras::Extras::read(settings.data()).noise;  // CONCEPTFORGE: patch 17
 
     textureOption.reset(new KisTextureOption(settings.data(),
@@ -68,6 +75,7 @@ KisBrushOpResources::KisBrushOpResources(const KisPaintOpSettingsSP settings, Ki
 
 KisBrushOpResources::~KisBrushOpResources()
 {
+    delete m_d->cfPurityTransformation;
     qDeleteAll(m_d->hsvOptions);
     delete m_d->hsvTransformation;
 }
@@ -82,6 +90,15 @@ void KisBrushOpResources::syncResourcesToSeqNo(int seqNo, const KisPaintInformat
             option->apply(m_d->hsvTransformation, info);
         }
         colorSource->applyColorTransformation(m_d->hsvTransformation);
+    }
+
+    if (m_d->cfPurityTransformation) {
+        // Purity is a fixed shift of saturation, on top of whatever the saturation option did
+        m_d->cfPurityTransformation->setParameter(m_d->cfPurityTransformation->parameterId("s"), m_d->cfPurity);
+        m_d->cfPurityTransformation->setParameter(3, 0);
+        m_d->cfPurityTransformation->setParameter(4, false);
+        m_d->cfPurityTransformation->setParameter(8, false);
+        colorSource->applyColorTransformation(m_d->cfPurityTransformation);
     }
 
     KisDabCacheUtils::DabRenderingResources::syncResourcesToSeqNo(seqNo, info);

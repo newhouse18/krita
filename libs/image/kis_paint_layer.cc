@@ -156,7 +156,7 @@ void KisPaintLayer::copyOriginalToProjection(const KisPaintDeviceSP original,
     if (hasTemporaryTarget()) {
         KisPainter gc(projection);
         setupTemporaryPainter(&gc);
-        gc.bitBlt(rect.topLeft(), temporaryTarget(), rect);
+        gc.bitBlt(rect.topLeft(), wetEdgeSource(temporaryTarget(), rect), rect);  // CONCEPTFORGE: patch 18
     }
 
     if (m_d->contentChannel &&

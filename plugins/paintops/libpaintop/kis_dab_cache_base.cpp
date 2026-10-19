@@ -140,9 +140,12 @@ KisDabCacheBase::getDabParameters(KisBrushSP brush,
 }
 
 bool KisDabCacheBase::needSeparateOriginal(KisTextureOption *textureOption,
-                                           KisSharpnessOption *sharpnessOption) const
+                                           KisSharpnessOption *sharpnessOption,
+                                           bool cfPostprocess) const
 {
-    return (textureOption && textureOption->m_enabled) ||
+    // CONCEPTFORGE: cfPostprocess is true when the brush has noise (patch 17)
+    return cfPostprocess ||
+           (textureOption && textureOption->m_enabled) ||
            (sharpnessOption && sharpnessOption->isChecked());
 }
 
@@ -283,6 +286,6 @@ void KisDabCacheBase::fetchDabGenerationInfo(bool hasDabInCache,
         m_d->lastSavedDabParameters = newParams;
     }
 
-    di->needsPostprocessing = needSeparateOriginal(resources->textureOption.get(), resources->sharpnessOption.get());
+    di->needsPostprocessing = needSeparateOriginal(resources->textureOption.get(), resources->sharpnessOption.get(), resources->cfNoise > 0.0);
 }
 

@@ -87,6 +87,7 @@ struct KisToolFreehandHelper::Private
     bool hasTentativePixel;
 
     KisSmoothingOptionsSP smoothingOptions;
+    KisSmoothingOptionsSP toolSmoothingOptions;  // CONCEPTFORGE: the tool's own while a brush's smoothing is in use (patch 22)
 
     // fake random sources for hovering outline *only*
     KisRandomSourceSP fakeDabRandomSource;
@@ -319,6 +320,27 @@ void KisToolFreehandHelper::initPaintImpl(qreal startAngle,
                                               bounds);
     if(overrideNode) {
         m_d->resources->setCurrentNode(overrideNode);
+    }
+
+    // CONCEPTFORGE: Photoshop keeps Smoothing in the brush. A brush with Cf/Smoothing (percent) smooths its
+    // strokes by itself, whatever the tool is set to, and the tool's setting comes back after the stroke (patch 22).
+    m_d->toolSmoothingOptions.clear();
+    if (m_d->resources->currentPaintOpPreset()) {
+        const qreal cfSmoothing = m_d->resources->currentPaintOpPreset()->settings()->getDouble("Cf/Smoothing", 0.0);
+        if (cfSmoothing > 0.0) {
+            KisSmoothingOptionsSP cf(new KisSmoothingOptions(false));
+            cf->setTransient(true);  // the user's own smoothing setting must stay as it is
+            cf->setSmoothingType(KisSmoothingOptions::STABILIZER);
+            const qreal distance = qBound(3.0, 0.8 * cfSmoothing, 100.0);
+            cf->setSmoothnessDistanceMin(distance);
+            cf->setSmoothnessDistanceMax(distance);
+            // (the stabilizer always adjusts its distance for zoom, as Photoshop's "Adjust for Zoom" does)
+            cf->setFinishStabilizedCurve(true);     // its "Catch-up at end of stroke"
+            cf->setStabilizeSensors(true);
+            cf->setUseDelayDistance(false);
+            m_d->toolSmoothingOptions = m_d->smoothingOptions;
+            m_d->smoothingOptions = cf;
+        }
     }
 
     const bool airbrushing = m_d->resources->needsAirbrushing();
@@ -736,6 +758,11 @@ void KisToolFreehandHelper::endPaint()
     m_d->strokesFacade->endStroke(m_d->strokeId);
     m_d->strokeId.clear();
     m_d->infoBuilder->reset();
+
+    if (m_d->toolSmoothingOptions) {  // CONCEPTFORGE: patch 22
+        m_d->smoothingOptions = m_d->toolSmoothingOptions;
+        m_d->toolSmoothingOptions.clear();
+    }
 }
 
 void KisToolFreehandHelper::cancelPaint()
@@ -766,6 +793,10 @@ void KisToolFreehandHelper::cancelPaint()
     m_d->strokesFacade->cancelStroke(m_d->strokeId);
     m_d->strokeId.clear();
 
+    if (m_d->toolSmoothingOptions) {  // CONCEPTFORGE: patch 22
+        m_d->smoothingOptions = m_d->toolSmoothingOptions;
+        m_d->toolSmoothingOptions.clear();
+    }
 }
 
 int KisToolFreehandHelper::elapsedStrokeTime() const

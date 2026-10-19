@@ -56,6 +56,7 @@ KisTextureOption::KisTextureOption(const KisPropertiesConfiguration *setting,
 
 void KisTextureOption::fillProperties(const KisPropertiesConfiguration *setting, KisResourcesInterfaceSP resourcesInterface, KoCanvasResourcesInterfaceSP canvasResourcesInterface)
 {
+    m_cfEachTip = setting->getBool("Cf/Texture/EachTip", false);  // CONCEPTFORGE: patch 19
     KisTextureOptionData data;
     data.read(setting);
 
@@ -277,8 +278,11 @@ void KisTextureOption::applyGradient(KisFixedPaintDeviceSP dab, const QPoint& of
     }
 }
 
-void KisTextureOption::apply(KisFixedPaintDeviceSP dab, const QPoint &offset, const KisPaintInformation & info)
+void KisTextureOption::apply(KisFixedPaintDeviceSP dab, const QPoint &offsetIn, const KisPaintInformation & info)
 {
+    // CONCEPTFORGE: Photoshop's Texture Each Tip: the pattern is laid on every dab from its own corner,
+    // not on the canvas, so each dab carries the same texture (patch 19)
+    const QPoint offset = m_cfEachTip ? QPoint(0, 0) : offsetIn;
     if (!m_enabled) return;
     if (!m_maskInfo->isValid()) return;
 

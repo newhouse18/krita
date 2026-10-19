@@ -67,6 +67,9 @@ KisBrushOp::KisBrushOp(const KisPaintOpSettingsSP settings, KisPainter *painter,
     Q_ASSERT(settings);
 
     m_cf = CfBrushExtras::Extras::read(settings.data());  // CONCEPTFORGE: patches 15, 16
+    if (m_cf.wetEdges > 0.0) {
+        m_cfWetGrow = qCeil(qBound(1.5, 0.2 * settings->paintOpSize(), 40.0)) + 3;  // patch 18
+    }
 
     m_airbrushData.read(settings.data());
     m_rotationOption.applyFanCornersInfo(this);
@@ -334,7 +337,8 @@ std::pair<int, bool> KisBrushOp::doAsynchronousUpdate(QVector<KisRunnableStrokeJ
         KritaUtils::addJobSequential(jobs,
                 [state, this, someDabsAreStillInQueue] () {
                     Q_FOREACH(const QRect &rc, state->allDirtyRects) {
-                        state->painter->addDirtyRect(rc);
+                        // CONCEPTFORGE: a wet edge reaches past the dab (patch 18)
+                        state->painter->addDirtyRect(m_cfWetGrow > 0 ? kisGrowRect(rc, m_cfWetGrow) : rc);
                     }
 
                     state->painter->setAverageOpacity(state->dabsQueue.last().averageOpacity);

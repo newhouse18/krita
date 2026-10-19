@@ -27,6 +27,7 @@ struct Extras
     bool overrideTiltX {false}, overrideTiltY {false}, overrideRotation {false}, overridePressure {false};
     double tiltX {0.0}, tiltY {0.0}, rotation {0.0}, pressure {1.0};
     double noise {0.0};
+    double wetEdges {0.0};  // 0 to 1, patch 18 (the stroke-level work is in KisIndirectPaintingSupport)
 
     static Extras read(const KisPropertiesConfiguration *s)
     {
@@ -43,6 +44,7 @@ struct Extras
         e.rotation = s->getDouble("Cf/Pose/Rotation", 0.0);
         e.pressure = s->getDouble("Cf/Pose/Pressure", 1.0);
         e.noise = qBound(0.0, s->getDouble("Cf/Noise", 0.0), 1.0);
+        e.wetEdges = qBound(0.0, s->getDouble("Cf/WetEdges", 0.0), 1.0);
         return e;
     }
 

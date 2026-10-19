@@ -39,6 +39,7 @@ struct KisSmoothingOptions::Private {
     bool useDelayDistance;
     bool finishStabilizedCurve;
     bool stabilizeSensors;
+    bool transient {false};  // CONCEPTFORGE: patch 22
 };
 
 KisSmoothingOptions::KisSmoothingOptions(bool useSavedSmoothing)
@@ -179,8 +180,15 @@ bool KisSmoothingOptions::stabilizeSensors() const
     return m_d->stabilizeSensors;
 }
 
+void KisSmoothingOptions::setTransient(bool value)
+{
+    m_d->transient = value;
+}
+
 void KisSmoothingOptions::slotWriteConfig()
 {
+    if (m_d->transient) return;  // CONCEPTFORGE: patch 22
+
     KisConfig cfg(false);
     cfg.setLineSmoothingType(m_d->smoothingType);
     cfg.setLineSmoothingDistanceMin(m_d->smoothnessDistanceMin);

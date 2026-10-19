@@ -62,6 +62,7 @@ protected:
 
 
 private:
+    int m_cfWetGrow {0};  // CONCEPTFORGE: patch 18
     CfBrushExtras::Extras m_cf;  // CONCEPTFORGE: scatter count, brush pose (patches 15, 16)
     KisAirbrushOptionData m_airbrushData;
 

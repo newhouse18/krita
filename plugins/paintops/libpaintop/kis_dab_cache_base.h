@@ -61,7 +61,8 @@ public:
      * like 'texture' or 'sharpness'
      */
     bool needSeparateOriginal(KisTextureOption *textureOption,
-                              KisSharpnessOption *sharpnessOption) const;
+                              KisSharpnessOption *sharpnessOption,
+                              bool cfPostprocess = false) const;  // CONCEPTFORGE: patch 17
 
 protected:
     /**

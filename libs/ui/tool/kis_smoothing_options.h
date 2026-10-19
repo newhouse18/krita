@@ -61,6 +61,9 @@ public:
     bool finishStabilizedCurve() const;
 
     void setStabilizeSensors(bool value);
+
+    // CONCEPTFORGE: options a brush brings for one stroke are never written to the user's saved smoothing (patch 22)
+    void setTransient(bool value);
     bool stabilizeSensors() const;
 
 Q_SIGNALS:

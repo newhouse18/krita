@@ -46,6 +46,16 @@ public:
     void setTemporaryChannelFlags(const QBitArray& channelFlags);
     void setTemporarySelection(KisSelectionSP selection);
 
+    // CONCEPTFORGE: Photoshop's Wet Edges (patch 18). strength is the share of opacity the inside of the
+    // stroke loses (0 = off), radius the width in pixels over which the rim turns into the inside.
+    void setTemporaryWetEdges(qreal strength, qreal radius);
+
+    /**
+     * What to compose into `rect` from the temporary target: the target itself, or, with wet edges, a
+     * copy of that part in which the inside of the stroke is more transparent than its rim.
+     */
+    KisPaintDeviceSP wetEdgeSource(KisPaintDeviceSP src, const QRect &rect) const;
+
     /**
      * Configures the painter to conform the painting parameters
      * stored for th temporary target, such as compositeOp, opacity,

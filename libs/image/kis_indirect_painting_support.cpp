@@ -20,9 +20,14 @@
 #include "KisRunnableStrokeJobUtils.h"
 #include "kis_transaction.h"
 #include "kis_pointer_utils.h"
+#include <KoColorSpace.h>
+#include <kis_global.h>
+#include <vector>
 
 
 struct Q_DECL_HIDDEN KisIndirectPaintingSupport::Private {
+    qreal wetEdgeStrength {0.0};  // CONCEPTFORGE: patch 18
+    qreal wetEdgeRadius {0.0};
     // To simulate the indirect painting
     KisPaintDeviceSP temporaryTarget;
     QString compositeOp;
@@ -58,6 +63,79 @@ void KisIndirectPaintingSupport::setTemporaryTarget(KisPaintDeviceSP t)
 void KisIndirectPaintingSupport::setTemporaryCompositeOp(const QString &id)
 {
     d->compositeOp = id;
+}
+
+void KisIndirectPaintingSupport::setTemporaryWetEdges(qreal strength, qreal radius)
+{
+    d->wetEdgeStrength = qBound(0.0, strength, 1.0);
+    d->wetEdgeRadius = qMax(0.0, radius);
+}
+
+namespace {
+// a box blur of width 2r + 1 along one axis, zero outside the picture, by a running sum
+void boxBlur(const std::vector<float> &in, std::vector<float> &out, int w, int h, int r, bool horizontal)
+{
+    const int lines = horizontal ? h : w;
+    const int length = horizontal ? w : h;
+    const float norm = 1.0f / float(2 * r + 1);
+    for (int line = 0; line < lines; ++line) {
+        auto at = [&](int i) -> float {
+            if (i < 0 || i >= length) return 0.0f;
+            return horizontal ? in[line * w + i] : in[i * w + line];
+        };
+        float sum = 0.0f;
+        for (int i = -r; i <= r; ++i) sum += at(i);
+        for (int i = 0; i < length; ++i) {
+            const float value = sum * norm;
+            if (horizontal) out[line * w + i] = value; else out[i * w + line] = value;
+            sum += at(i + r + 1) - at(i - r);
+        }
+    }
+}
+}  // namespace
+
+KisPaintDeviceSP KisIndirectPaintingSupport::wetEdgeSource(KisPaintDeviceSP src, const QRect &rect) const
+{
+    if (d->wetEdgeStrength <= 0.0 || !src || rect.isEmpty()) return src;
+
+    // The rim is where the stroke's own coverage, blurred over the radius, is still below one: at the
+    // outline the blur is one half, a radius inside it is one. Two box passes make the blur smooth.
+    const int r = qMax(1, qRound(d->wetEdgeRadius / 2.0));
+    const QRect big = kisGrowRect(rect, 2 * r + 1);
+    const int w = big.width();
+    const int h = big.height();
+    const KoColorSpace *cs = src->colorSpace();
+    const int pixelSize = cs->pixelSize();
+
+    QByteArray bytes(w * h * pixelSize, 0);
+    src->readBytes(reinterpret_cast<quint8 *>(bytes.data()), big);
+    std::vector<float> a(size_t(w) * h), b(size_t(w) * h);
+    for (int i = 0; i < w * h; ++i) {
+        a[i] = cs->opacityF(reinterpret_cast<const quint8 *>(bytes.constData()) + i * pixelSize);
+    }
+    boxBlur(a, b, w, h, r, true);
+    boxBlur(b, a, w, h, r, false);
+    boxBlur(a, b, w, h, r, true);
+    boxBlur(b, a, w, h, r, false);
+
+    KisPaintDeviceSP out = new KisPaintDevice(cs);
+    KisPainter::copyAreaOptimized(rect.topLeft(), src, out, rect);
+    const int n = rect.width() * rect.height();
+    QByteArray outBytes(n * pixelSize, 0);
+    out->readBytes(reinterpret_cast<quint8 *>(outBytes.data()), rect);
+    QVector<quint8> mask(n);
+    for (int y = 0; y < rect.height(); ++y) {
+        for (int x = 0; x < rect.width(); ++x) {
+            const float blurred = a[size_t(y + rect.top() - big.top()) * w + (x + rect.left() - big.left())];
+            // 0 on the rim (blur <= 0.5), 1 inside (blur >= 1), smooth between
+            float t = qBound(0.0f, (blurred - 0.5f) * 2.0f, 1.0f);
+            t = t * t * (3.0f - 2.0f * t);
+            mask[y * rect.width() + x] = quint8(255.0f * (1.0f - float(d->wetEdgeStrength) * t) + 0.5f);
+        }
+    }
+    cs->applyAlphaU8Mask(reinterpret_cast<quint8 *>(outBytes.data()), mask.constData(), n);
+    out->writeBytes(reinterpret_cast<const quint8 *>(outBytes.constData()), rect);
+    return out;
 }
 
 void KisIndirectPaintingSupport::setTemporaryOpacity(qreal o)
@@ -205,7 +283,7 @@ void KisIndirectPaintingSupport::mergeToLayerImpl(KisPaintDeviceSP dst, KUndo2Co
 
                 KisPainter gc(dst);
                 setupTemporaryPainter(&gc);
-                this->writeMergeData(&gc, src, rc);
+                this->writeMergeData(&gc, wetEdgeSource(src, rc), rc);  // CONCEPTFORGE: patch 18
             }
         );
     }

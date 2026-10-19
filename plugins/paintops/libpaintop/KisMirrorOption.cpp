@@ -19,6 +19,10 @@ namespace kpou = KisPaintOpOptionUtils;
 KisMirrorOption::KisMirrorOption(const KisPropertiesConfiguration *setting)
     : KisMirrorOption(kpou::loadOptionData<KisMirrorOptionData>(setting))
 {
+    m_cfFlipX = setting->getBool("Cf/Flip/X", false);
+    m_cfFlipY = setting->getBool("Cf/Flip/Y", false);
+    m_cfJitterX = setting->getBool("Cf/Flip/JitterX", false);
+    m_cfJitterY = setting->getBool("Cf/Flip/JitterY", false);
 }
 
 KisMirrorOption::KisMirrorOption(const KisMirrorOptionData &data)
@@ -44,6 +48,16 @@ MirrorProperties KisMirrorOption::apply(const KisPaintInformation &info) const
         mirrorYIncrement += result && m_enableVerticalMirror;
         coordinateSystemFlipped = result &&
                                   (m_enableHorizontalMirror != m_enableVerticalMirror);
+    }
+
+    if (m_cfFlipX || m_cfFlipY || m_cfJitterX || m_cfJitterY) {
+        bool flipX = m_cfFlipX;
+        bool flipY = m_cfFlipY;
+        if (m_cfJitterX && info.randomSource()->generate(0, 1)) flipX = !flipX;
+        if (m_cfJitterY && info.randomSource()->generate(0, 1)) flipY = !flipY;
+        mirrorXIncrement += flipX;
+        mirrorYIncrement += flipY;
+        if (flipX != flipY) coordinateSystemFlipped = !coordinateSystemFlipped;
     }
 
     MirrorProperties mirrors;

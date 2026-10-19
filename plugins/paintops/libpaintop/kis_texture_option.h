@@ -37,6 +37,7 @@ public:
                      KisBrushTextureFlags flags = None);
 
     bool m_enabled {false};
+    bool m_cfEachTip {false};  // CONCEPTFORGE: the pattern starts again at every dab (patch 19)
 
     /**
      * @brief apply combine the texture map with the dab

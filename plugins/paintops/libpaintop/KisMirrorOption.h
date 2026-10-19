@@ -23,6 +23,8 @@ private:
 private:
     bool m_enableHorizontalMirror;
     bool m_enableVerticalMirror;
+    // CONCEPTFORGE: Photoshop's Flip X / Flip Y and Flip X / Y Jitter, each on its own (patch 20)
+    bool m_cfFlipX {false}, m_cfFlipY {false}, m_cfJitterX {false}, m_cfJitterY {false};
 };
 
 #endif // KISMIRROROPTION_H

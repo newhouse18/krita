@@ -67,6 +67,9 @@ KisBrushBasedPaintOpSettings::KisBrushBasedPaintOpSettings(KisResourcesInterface
 
 bool KisBrushBasedPaintOpSettings::paintIncremental()
 {
+    // CONCEPTFORGE: Wet Edges needs the stroke painted as a whole, as in wash mode (patch 18)
+    if (getDouble("Cf/WetEdges", 0.0) > 0.0) return false;
+
     KisPaintingModeOptionData data;
     data.read(this);
     return !data.hasPaintingModeProperty || data.paintingMode == enumPaintingMode::BUILDUP;
