@@ -100,6 +100,31 @@ void boxBlur(const std::vector<float> &in, std::vector<float> &out, int w, int h
 }
 }  // namespace
 
+namespace {
+
+// Photoshop's Wet Edges as a map of the stroke's opacity a to the wet opacity (patch 27), measured pixel by pixel on its own marks:
+// the same hard-tip mark with and without Wet Edges (lab 2, H100 and W_WET). It rises as 1.5 a to 0.75 at one half, stays there to
+// 0.6, then falls to 0.6 at full opacity: the inside of a stroke is thinner than its rim.
+double photoshopWetEdge(double a)
+{
+    static const double table[][2] = {{0.0, 0.0},    {0.025, 0.056}, {0.075, 0.116}, {0.125, 0.181}, {0.175, 0.257}, {0.225, 0.328},
+                                      {0.275, 0.419}, {0.325, 0.504}, {0.375, 0.562}, {0.425, 0.632}, {0.475, 0.708}, {0.525, 0.751},
+                                      {0.575, 0.751}, {0.625, 0.746}, {0.675, 0.734}, {0.725, 0.720}, {0.775, 0.706}, {0.825, 0.683},
+                                      {0.875, 0.664}, {0.925, 0.641}, {0.975, 0.610}, {1.0, 0.595}};
+    const int n = int(sizeof(table) / sizeof(table[0]));
+    if (a <= 0.0) return 0.0;
+    if (a >= 1.0) return table[n - 1][1];
+    for (int i = 1; i < n; ++i) {
+        if (a <= table[i][0]) {
+            const double t = (a - table[i - 1][0]) / (table[i][0] - table[i - 1][0]);
+            return table[i - 1][1] + t * (table[i][1] - table[i - 1][1]);
+        }
+    }
+    return table[n - 1][1];
+}
+
+}  // namespace
+
 KisPaintDeviceSP KisIndirectPaintingSupport::wetEdgeSource(KisPaintDeviceSP src, const QRect &rect) const
 {
     if ((d->wetEdgeStrength <= 0.0 && !d->processor) || !src || rect.isEmpty()) return src;
@@ -121,7 +146,7 @@ KisPaintDeviceSP KisIndirectPaintingSupport::wetEdgeSource(KisPaintDeviceSP src,
     for (int i = 0; i < n; ++i, p += pixelSize) {
         const double a = cs->opacityF(p);
         if (a <= 0.0) continue;
-        const double wet = qMin(1.5 * a, 0.75 - 0.322 * (a - 0.5));
+        const double wet = photoshopWetEdge(a);
         const double result = a + strength * (wet - a);
         cs->setOpacity(p, quint8(qBound(0.0, result * 255.0 + 0.5, 255.0)), 1);
     }

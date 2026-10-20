@@ -748,7 +748,11 @@ public:
                 const channels_type maskScaled = KoColorSpaceMaths<quint8, channels_type>::scaleToA(mask);
 
                 channels_type *dstDataPtr = reinterpret_cast<channels_type*>(dstPtr);
-                *dstDataPtr = m_compositeFunction.apply(maskScaled, *dstDataPtr);
+                // CONCEPTFORGE: patch 27. A texture or second tip changes the opacity of paint that is there; it never makes paint out of
+                // nothing (with Hard Mix at its full-sum edge an empty pixel under a bright pattern pixel would come out solid)
+                if (*dstDataPtr != 0) {
+                    *dstDataPtr = m_compositeFunction.apply(maskScaled, *dstDataPtr);
+                }
 
                 srcPtr += sizeof(MaskPixel);
                 dstPtr += m_dstPixelSize;
