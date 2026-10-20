@@ -36,6 +36,8 @@ struct Extras
     bool roundTip {false};       // a generated round tip (patch 26)
     double psMixSize {-1.0};     // >= 0: size = this + (1 - this) * (the size curves' product), Photoshop's minimum with jitter and a control (patch 27)
     double psMixRoundness {-1.0};
+    bool tiltAngle {false};      // the angle follows the direction of the pen's tilt (Photoshop's Pen Tilt on Angle, patch 28)
+    double tiltSize {0.0};       // > 0: the size grows with the pen's tilt, by this share of Photoshop's amount (Pen Tilt on Size, patch 28)
     double softScale {1.0};      // the tip's mask is drawn this much bigger than its size: Photoshop's soft tips reach past it (patch 26)
     QString countControl;        // "", pressure, tangentialpressure, tiltelevation, rotation, drawingangle, fade
     int countSteps {25};         // the steps of the fade control
@@ -61,6 +63,8 @@ struct Extras
         e.roundTip = s->getBool("Cf/SpacingMinor", false);
         if (s->hasProperty("Cf/PsMix/Size")) e.psMixSize = qBound(0.0, s->getDouble("Cf/PsMix/Size", 0.0), 1.0);
         if (s->hasProperty("Cf/PsMix/Roundness")) e.psMixRoundness = qBound(0.0, s->getDouble("Cf/PsMix/Roundness", 0.0), 1.0);
+        e.tiltAngle = s->getBool("Cf/Tilt/Angle", false);
+        e.tiltSize = qMax(0.0, s->getDouble("Cf/Tilt/Size", 0.0));
         e.softScale = qBound(1.0, s->getDouble("Cf/SoftScale", 1.0), 3.0);
         e.countControl = s->getString("Cf/ScatterCountControl", QString());
         e.countSteps = qMax(1, s->getInt("Cf/ScatterCountSteps", 25));
@@ -100,6 +104,24 @@ struct Extras
         if (countControl == QLatin1String("drawingangle")) return qBound(0.0, info.drawingAngle() / (2.0 * M_PI) + 0.5, 1.0);
         if (countControl == QLatin1String("fade")) return qBound(0.0, 1.0 - qreal(info.currentDabSeqNo()) / countSteps, 1.0);
         return 1.0;
+    }
+
+    // Pen Tilt on the size (patch 28), measured in Photoshop with a simulated pen: 1 upright, 1.25 at 20 degrees, 1.5 at 40, 1.65 at 60;
+    // 1 + 0.75 sin(lean), the lean being the length of the two tilts in degrees
+    qreal tiltSizeFactor(const KisPaintInformation &info) const
+    {
+        if (tiltSize <= 0.0 || info.isHoveringMode()) return 1.0;
+        const qreal lean = qMin(90.0, std::sqrt(info.xTilt() * info.xTilt() + info.yTilt() * info.yTilt()));
+        return 1.0 + 0.75 * tiltSize * std::sin(lean * M_PI / 180.0);
+    }
+
+    // Pen Tilt on the angle (patch 28): the long axis of the tip stands across the direction the pen leans (leaning right makes it
+    // vertical, leaning toward the user horizontal, right and down a slant) - radians to add to the tip's angle
+    qreal tiltAngleFor(const KisPaintInformation &info) const
+    {
+        if (!tiltAngle || info.isHoveringMode()) return 0.0;
+        if (info.xTilt() == 0.0 && info.yTilt() == 0.0) return 0.0;
+        return std::atan2(info.xTilt(), info.yTilt());
     }
 
     // Angle Jitter: a random turn on top of the angle (radians)

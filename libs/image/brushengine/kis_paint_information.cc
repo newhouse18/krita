@@ -702,18 +702,13 @@ qreal KisPaintInformation::tiltDirection(const KisPaintInformation& info, bool n
 
 qreal KisPaintInformation::tiltElevation(const KisPaintInformation& info, qreal maxTiltX, qreal maxTiltY, bool normalize)
 {
-    qreal xTilt = qBound(qreal(-1.0), info.xTilt() / maxTiltX , qreal(1.0));
-    qreal yTilt = qBound(qreal(-1.0), info.yTilt() / maxTiltY , qreal(1.0));
-
-    qreal e;
-    if (fabs(xTilt) > fabs(yTilt)) {
-        e = sqrt(qreal(1.0) + yTilt * yTilt);
-    } else {
-        e = sqrt(qreal(1.0) + xTilt * xTilt);
-    }
-
-    qreal cosAlpha    = sqrt(xTilt * xTilt + yTilt * yTilt) / e;
-    qreal tiltElevation = acos(cosAlpha); // in radians in [0, 0.5 * PI]
+    Q_UNUSED(maxTiltX);
+    Q_UNUSED(maxTiltY);
+    // CONCEPTFORGE: patch 28. Photoshop's Pen Tilt, measured with a simulated pen (lab 5): the pen's lean is the length of the two
+    // tilts in degrees, and the control is 1 with the pen upright and falls in a straight line to 0 at 90 degrees (opacity 1, 0.78, 0.56,
+    // 0.33 at 0, 20, 40, 60 degrees; roundness follows the same line). Krita's own value reached 0 already at 60 degrees.
+    const qreal lean = qMin(qreal(90.0), sqrt(info.xTilt() * info.xTilt() + info.yTilt() * info.yTilt()));
+    const qreal tiltElevation = (qreal(90.0) - lean) / qreal(90.0) * (M_PI * qreal(0.5)); // in radians in [0, 0.5 * PI]
 
     // mapping to 0.0..1.0 if normalize is true
     return normalize ? (tiltElevation / (M_PI * qreal(0.5))) : tiltElevation;

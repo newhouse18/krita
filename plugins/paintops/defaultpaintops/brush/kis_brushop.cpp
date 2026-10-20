@@ -123,11 +123,13 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
 
     qreal scale = m_sizeOption.apply(info);
     if (m_cf.psMixSize >= 0.0) scale = m_cf.psMixSize + (1.0 - m_cf.psMixSize) * scale;   // CONCEPTFORGE: patch 27
+    scale *= m_cf.tiltSizeFactor(info);   // CONCEPTFORGE: patch 28
     scale *= KisLodTransform::lodToScale(painter()->device());
     if (checkSizeTooSmall(scale)) return KisSpacingInformation();
 
     qreal rotation = m_rotationOption.apply(info);
     rotation += m_cf.angleJitterFor(info);  // CONCEPTFORGE: patch 23
+    rotation += m_cf.tiltAngleFor(info);    // CONCEPTFORGE: patch 28
     qreal ratio = m_ratioOption.apply(info);
     if (m_cf.psMixRoundness >= 0.0) ratio = m_cf.psMixRoundness + (1.0 - m_cf.psMixRoundness) * ratio;   // CONCEPTFORGE: patch 27
     ratio *= m_cf.tipRoundness;  // CONCEPTFORGE: patch 23
