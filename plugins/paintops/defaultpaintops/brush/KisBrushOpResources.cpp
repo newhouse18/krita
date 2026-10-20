@@ -95,7 +95,9 @@ KisBrushOpResources::KisBrushOpResources(const KisPaintOpSettingsSP settings, Ki
         m_d->cfPurityTransformation =
             painter->backgroundColor().colorSpace()->createColorTransformation("hsv_adjustment", QHash<QString, QVariant>());
     }
-    cfNoise = CfBrushExtras::Extras::read(settings.data()).noise;  // CONCEPTFORGE: patch 17
+    // CONCEPTFORGE: patch 17. Noise is put on the whole stroke when it is composed (KisBrushBasedPaintOpSettings::cfStrokeProcessor,
+    // patch 27), as Photoshop does: per dab, the overlapping dabs would average it out at the edge. So cfNoise stays 0 here.
+    cfNoise = 0.0;
 
     textureOption.reset(new KisTextureOption(settings.data(),
                                              settings->resourcesInterface(),

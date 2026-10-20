@@ -34,6 +34,8 @@ struct Extras
     double tipRoundness {1.0};   // patch 23
     double angleJitter {0.0};    // 0 to 1: a turn of up to +-360 degrees times this, added to the angle (patch 23, range from Photoshop: patch 26)
     bool roundTip {false};       // a generated round tip (patch 26)
+    double psMixSize {-1.0};     // >= 0: size = this + (1 - this) * (the size curves' product), Photoshop's minimum with jitter and a control (patch 27)
+    double psMixRoundness {-1.0};
     double softScale {1.0};      // the tip's mask is drawn this much bigger than its size: Photoshop's soft tips reach past it (patch 26)
     QString countControl;        // "", pressure, tangentialpressure, tiltelevation, rotation, drawingangle, fade
     int countSteps {25};         // the steps of the fade control
@@ -57,6 +59,8 @@ struct Extras
         e.tipRoundness = qBound(0.01, s->getDouble("Cf/TipRoundness", 1.0), 1.0);
         e.angleJitter = qBound(0.0, s->getDouble("Cf/AngleJitter", 0.0), 1.0);
         e.roundTip = s->getBool("Cf/SpacingMinor", false);
+        if (s->hasProperty("Cf/PsMix/Size")) e.psMixSize = qBound(0.0, s->getDouble("Cf/PsMix/Size", 0.0), 1.0);
+        if (s->hasProperty("Cf/PsMix/Roundness")) e.psMixRoundness = qBound(0.0, s->getDouble("Cf/PsMix/Roundness", 0.0), 1.0);
         e.softScale = qBound(1.0, s->getDouble("Cf/SoftScale", 1.0), 3.0);
         e.countControl = s->getString("Cf/ScatterCountControl", QString());
         e.countSteps = qMax(1, s->getInt("Cf/ScatterCountSteps", 25));

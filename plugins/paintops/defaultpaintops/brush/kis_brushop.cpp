@@ -122,12 +122,15 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
         return KisSpacingInformation(1.0);
 
     qreal scale = m_sizeOption.apply(info);
+    if (m_cf.psMixSize >= 0.0) scale = m_cf.psMixSize + (1.0 - m_cf.psMixSize) * scale;   // CONCEPTFORGE: patch 27
     scale *= KisLodTransform::lodToScale(painter()->device());
     if (checkSizeTooSmall(scale)) return KisSpacingInformation();
 
     qreal rotation = m_rotationOption.apply(info);
     rotation += m_cf.angleJitterFor(info);  // CONCEPTFORGE: patch 23
-    qreal ratio = m_ratioOption.apply(info) * m_cf.tipRoundness;  // CONCEPTFORGE: patch 23
+    qreal ratio = m_ratioOption.apply(info);
+    if (m_cf.psMixRoundness >= 0.0) ratio = m_cf.psMixRoundness + (1.0 - m_cf.psMixRoundness) * ratio;   // CONCEPTFORGE: patch 27
+    ratio *= m_cf.tipRoundness;  // CONCEPTFORGE: patch 23
 
     // CONCEPTFORGE: patch 26. A Photoshop soft tip reaches past its size: its mask is drawn bigger (the spacing keeps the size)
     if (m_cf.roundTip && m_cf.softScale < 1.1) {
@@ -141,6 +144,10 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
         qreal extra = 0.0;
         if (share <= 0.12) extra = minor < 3.0 ? 2.0 : 1.15;
         else if (share <= 0.3 && minor < 12.0) extra = 0.35;
+        // the whole extra shows with the thin side upright; turned to 90 degrees about half of it does (lab 3: ink per column of a thin
+        // tip at 0, 30, 45, 60 and 90 degrees)
+        const qreal turn = rotation + brush->angle();
+        extra *= 0.55 + 0.45 * cos(turn) * cos(turn);
         if (minor > 0.3 && extra > 0.0) ratio *= (minor + extra) / minor;
     }
     KisDabShape shape(scale * m_cf.softScale, ratio, rotation);
@@ -401,7 +408,9 @@ std::pair<int, bool> KisBrushOp::doAsynchronousUpdate(QVector<KisRunnableStrokeJ
 
 KisSpacingInformation KisBrushOp::updateSpacingImpl(const KisPaintInformation &info) const
 {
-    const qreal scale = m_sizeOption.apply(info) * KisLodTransform::lodToScale(painter()->device());
+    qreal sizeValue = m_sizeOption.apply(info);
+    if (m_cf.psMixSize >= 0.0) sizeValue = m_cf.psMixSize + (1.0 - m_cf.psMixSize) * sizeValue;   // CONCEPTFORGE: patch 27
+    const qreal scale = sizeValue * KisLodTransform::lodToScale(painter()->device());
     qreal rotation = m_rotationOption.apply(info);
     return effectiveSpacing(scale, rotation, &m_airbrushData, &m_spacingOption, info);
 }

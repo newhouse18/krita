@@ -18,6 +18,7 @@
 #include "KoCanvasResourcesIds.h"
 #include "kis_texture_option.h"
 #include <kis_fixed_paint_device.h>
+#include <KoColorSpace.h>
 #include <QFile>
 #include <KoResourceCacheInterface.h>
 #include <KisOptimizedBrushOutline.h>
@@ -72,6 +73,7 @@ bool KisBrushBasedPaintOpSettings::paintIncremental()
     // CONCEPTFORGE: Wet Edges needs the stroke painted as a whole, as in wash mode (patch 18)
     if (getDouble("Cf/WetEdges", 0.0) > 0.0) return false;
     if (KisTextureOption::cfStrokeLevel(this)) return false;   // patch 27: the texture is put on the stroke as a whole
+    if (getDouble("Cf/Noise", 0.0) > 0.0) return false;       // patch 27: and so is the noise
 
     KisPaintingModeOptionData data;
     data.read(this);
@@ -80,17 +82,42 @@ bool KisBrushBasedPaintOpSettings::paintIncremental()
 
 std::function<void(KisPaintDeviceSP, const QRect &)> KisBrushBasedPaintOpSettings::cfStrokeProcessor() const
 {
-    // CONCEPTFORGE: patch 27
-    if (!KisTextureOption::cfStrokeLevel(this)) return {};
-    QSharedPointer<KisTextureOption> option(new KisTextureOption(this, resourcesInterface(), canvasResourcesInterface(), 0,
-                                                                 SupportsGradientMode | SupportsLightnessMode));
-    option->cfMakeStrokeInstance();
-    return [option](KisPaintDeviceSP device, const QRect &rect) {
+    // CONCEPTFORGE: patch 27. What Photoshop does to the stroke as a whole: the brush texture and the noise.
+    const bool texture = KisTextureOption::cfStrokeLevel(this);
+    const double noise = qBound(0.0, getDouble("Cf/Noise", 0.0), 1.0);
+    if (!texture && noise <= 0.0) return {};
+    QSharedPointer<KisTextureOption> option;
+    if (texture) {
+        option.reset(new KisTextureOption(this, resourcesInterface(), canvasResourcesInterface(), 0, SupportsGradientMode | SupportsLightnessMode));
+        option->cfMakeStrokeInstance();
+    }
+    return [option, noise](KisPaintDeviceSP device, const QRect &rect) {
         KisFixedPaintDeviceSP dab = new KisFixedPaintDevice(device->colorSpace());
         dab->setRect(QRect(0, 0, rect.width(), rect.height()));   // the texture code takes the position from the offset
         dab->lazyGrowBufferWithoutInitialization();
         device->readBytes(dab->data(), rect);
-        option->apply(dab, rect.topLeft(), KisPaintInformation());
+        if (option) option->apply(dab, rect.topLeft(), KisPaintInformation());
+        if (noise > 0.0) {
+            // Photoshop's noise on a stroke (measured on single marks, lab 2): only the partly transparent pixels change, by up to
+            // 0.72 times the nearer of their opacity and what is missing to full opacity, either way. The random number comes from
+            // the pixel's place, so the same stroke looks the same every time the canvas is redrawn.
+            const KoColorSpace *cs = dab->colorSpace();
+            const int pixelSize = cs->pixelSize();
+            const double amount = 0.72 * qMin(1.0, noise * 2.0);
+            quint8 *p = dab->data();
+            for (int y = 0; y < rect.height(); ++y) {
+                for (int x = 0; x < rect.width(); ++x, p += pixelSize) {
+                    const double a = cs->opacityF(p);
+                    if (a <= 0.0 || a >= 1.0) continue;
+                    quint32 h = quint32(x + rect.left()) * 374761393u + quint32(y + rect.top()) * 668265263u + 2246822519u;
+                    h = (h ^ (h >> 13)) * 1274126177u;
+                    h ^= h >> 16;
+                    const double u = double(h) / 4294967296.0;
+                    const double change = (2.0 * u - 1.0) * amount * qMin(a, 1.0 - a);
+                    cs->setOpacity(p, quint8(qBound(0.0, (a + change) * 255.0 + 0.5, 255.0)), 1);
+                }
+            }
+        }
         device->writeBytes(dab->data(), rect);
     };
 }
