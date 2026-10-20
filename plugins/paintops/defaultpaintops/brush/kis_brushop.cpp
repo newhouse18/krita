@@ -131,12 +131,17 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
 
     // CONCEPTFORGE: patch 26. A Photoshop soft tip reaches past its size: its mask is drawn bigger (the spacing keeps the size)
     if (m_cf.roundTip && m_cf.softScale < 1.1) {
-        // CONCEPTFORGE: patch 26. A thin hard tip is about one pixel thicker in Photoshop (a 4 pixel line comes out 5 pixels
-        // thick, measured on its marks): the edge antialiasing adds to the thin side
-        const KisDabShape plain(scale, ratio, rotation);
-        const qreal w = brush->maskWidth(plain, 0, 0, info), h = brush->maskHeight(plain, 0, 0, info);
+        // CONCEPTFORGE: patch 26. A thin hard tip is thicker in Photoshop than its roundness says (measured, lab 3, a hard tip at
+        // roundness 10: 1 pixel thick -> 2.9, 2 -> 3.5, 4 -> 5.0, 8 -> 9.0; at roundness 25 a half pixel, at 50 nothing): the edge
+        // antialiasing adds to the thin side
+        // the tip's own sides (the brush's unturned width and height), not the bounding box of the turned mask
+        const qreal w = brush->width() * scale, h = brush->height() * scale * ratio;
         const qreal major = qMax(w, h), minor = qMin(w, h);
-        if (minor > 0.3 && minor < 8.0 && minor < 0.5 * major) ratio *= (minor + 1.0) / minor;
+        const qreal share = major > 0.0 ? minor / major : 1.0;
+        qreal extra = 0.0;
+        if (share <= 0.12) extra = minor < 3.0 ? 2.0 : 1.15;
+        else if (share <= 0.3 && minor < 12.0) extra = 0.35;
+        if (minor > 0.3 && extra > 0.0) ratio *= (minor + extra) / minor;
     }
     KisDabShape shape(scale * m_cf.softScale, ratio, rotation);
 

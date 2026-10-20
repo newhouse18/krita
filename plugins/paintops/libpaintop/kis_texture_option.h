@@ -57,7 +57,7 @@ public:
     // preset (key Cf/Texture/StrokeLevel, texture on, not each tip, depth without a control) has the dab-level option off,
     // and its settings give a processor that does the same on the composed stroke.
     static bool cfStrokeLevel(const KisPropertiesConfiguration *setting);
-    void cfMakeStrokeInstance() { m_enabled = m_cfWasEnabled; }
+    void cfMakeStrokeInstance() { m_enabled = m_cfWasEnabled; m_cfConstantDepth = true; }
 
     static bool applyingGradient(const KisPropertiesConfiguration *settings);
     static bool requiresEffectiveCompositeOp(const KisPropertiesConfiguration *settings);

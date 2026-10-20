@@ -60,33 +60,20 @@ bool KisTextureOption::cfStrokeLevel(const KisPropertiesConfiguration *setting)
     KisTextureOptionData data;
     data.read(setting);
     if (!data.isEnabled || data.textureData.isNull()) return false;
-    // the importer and the panel say whether the depth follows a control (the editor of Krita's own texture option puts a
-    // Pressure sensor back on, which must not count)
-    if (setting->hasProperty("Cf/Texture/DepthControl")) return setting->getString("Cf/Texture/DepthControl").isEmpty();
-    KisStrengthOptionData strength;
-    strength.read(setting);
-    if (strength.isChecked) {
-        for (const KisSensorData *sensor : strength.sensors()) {
-            if (!sensor->isActive) continue;
-            // a constant curve of 1 is how the importer marks "no control" on an option that cannot be off
-            bool flat = true;
-            for (const QString &point : sensor->curve.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
-                if (point.section(QLatin1Char(','), 1, 1).toDouble() < 0.9999) flat = false;
-            }
-            if (!flat) return false;   // a depth that follows a control or jitters differs from dab to dab
-        }
-    }
+    // Photoshop ignores a depth jitter or fade on a texture that goes on the whole stroke (measured, lab 3): whatever the
+    // depth follows, the stroke gets the constant depth.
     return true;
 }
 
 void KisTextureOption::fillProperties(const KisPropertiesConfiguration *setting, KisResourcesInterfaceSP resourcesInterface, KoCanvasResourcesInterfaceSP canvasResourcesInterface)
 {
     m_cfEachTip = setting->getBool("Cf/Texture/EachTip", false);  // CONCEPTFORGE: patch 19
-    if (setting->hasProperty("Cf/Texture/DepthControl") && setting->getString("Cf/Texture/DepthControl").isEmpty()) {
-        KisStrengthOptionData strength;   // patch 27: a depth without a control is the constant, whatever sensors the editor left on
+    {
+        KisStrengthOptionData strength;   // patch 27: the constant depth, for a depth without a control and for the whole stroke
         strength.read(setting);
-        m_cfConstantDepth = true;
         m_cfDepth = strength.strengthValue;
+        // Krita's own texture editor puts a Pressure sensor back on the depth; the key says there is no control
+        m_cfConstantDepth = setting->hasProperty("Cf/Texture/DepthControl") && setting->getString("Cf/Texture/DepthControl").isEmpty();
     }
     KisTextureOptionData data;
     data.read(setting);
