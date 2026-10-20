@@ -11,6 +11,8 @@
 #include "kritaimage_export.h"
 
 #include <QScopedPointer>
+#include <functional>
+#include <QRect>
 
 #include "kis_properties_configuration.h"
 #include <brushengine/kis_paint_information.h>
@@ -128,6 +130,13 @@ public:
      * @return true if we paint incrementally, false if we paint like Photoshop. By default, paintops
      *      do not support non-incremental.
      */
+    /**
+     * CONCEPTFORGE: patch 27. A change made to the finished stroke as a whole, when it is composed from the temporary target
+     * (Photoshop applies a brush texture to the stroke, not to each dab). Empty when there is none. It changes the alpha of
+     * the device in place inside the rect.
+     */
+    virtual std::function<void(KisPaintDeviceSP, const QRect &)> cfStrokeProcessor() const { return {}; }
+
     virtual bool paintIncremental() {
         return true;
     }

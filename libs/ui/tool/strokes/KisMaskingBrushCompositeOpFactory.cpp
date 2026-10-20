@@ -46,6 +46,11 @@ KisMaskingBrushCompositeOpBase *createTypedOp(const QString &id, int pixelSize, 
         result = new KisMaskingBrushCompositeOp<channel_type, KIS_MASKING_BRUSH_COMPOSITE_HARD_MIX_SOFTER_PHOTOSHOP, mask_is_alpha>(pixelSize, alphaOffset);
     } else if (id == COMPOSITE_SUBTRACT) {
         result = new KisMaskingBrushCompositeOp<channel_type, KIS_MASKING_BRUSH_COMPOSITE_SUBTRACT, mask_is_alpha>(pixelSize, alphaOffset);
+    // CONCEPTFORGE: patch 27. Photoshop's Height modes (the second tip's blend modes) need the strength form, at full strength
+    } else if (id == "height_photoshop") {
+        result = new KisMaskingBrushCompositeOp<channel_type, KIS_MASKING_BRUSH_COMPOSITE_HEIGHT_PHOTOSHOP, mask_is_alpha, true, false>(pixelSize, alphaOffset, 1.0);
+    } else if (id == "linear_height_photoshop") {
+        result = new KisMaskingBrushCompositeOp<channel_type, KIS_MASKING_BRUSH_COMPOSITE_LINEAR_HEIGHT_PHOTOSHOP, mask_is_alpha, true, false>(pixelSize, alphaOffset, 1.0);
     }
 
     KIS_SAFE_ASSERT_RECOVER (result && "Unknown composite op for masked brush!") {

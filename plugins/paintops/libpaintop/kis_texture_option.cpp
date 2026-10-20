@@ -54,9 +54,40 @@ KisTextureOption::KisTextureOption(const KisPropertiesConfiguration *setting,
     fillProperties(setting, resourcesInterface, canvasResourcesInterface);
 }
 
+bool KisTextureOption::cfStrokeLevel(const KisPropertiesConfiguration *setting)
+{
+    if (!setting || !setting->getBool("Cf/Texture/StrokeLevel", false) || setting->getBool("Cf/Texture/EachTip", false)) return false;
+    KisTextureOptionData data;
+    data.read(setting);
+    if (!data.isEnabled || data.textureData.isNull()) return false;
+    // the importer and the panel say whether the depth follows a control (the editor of Krita's own texture option puts a
+    // Pressure sensor back on, which must not count)
+    if (setting->hasProperty("Cf/Texture/DepthControl")) return setting->getString("Cf/Texture/DepthControl").isEmpty();
+    KisStrengthOptionData strength;
+    strength.read(setting);
+    if (strength.isChecked) {
+        for (const KisSensorData *sensor : strength.sensors()) {
+            if (!sensor->isActive) continue;
+            // a constant curve of 1 is how the importer marks "no control" on an option that cannot be off
+            bool flat = true;
+            for (const QString &point : sensor->curve.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+                if (point.section(QLatin1Char(','), 1, 1).toDouble() < 0.9999) flat = false;
+            }
+            if (!flat) return false;   // a depth that follows a control or jitters differs from dab to dab
+        }
+    }
+    return true;
+}
+
 void KisTextureOption::fillProperties(const KisPropertiesConfiguration *setting, KisResourcesInterfaceSP resourcesInterface, KoCanvasResourcesInterfaceSP canvasResourcesInterface)
 {
     m_cfEachTip = setting->getBool("Cf/Texture/EachTip", false);  // CONCEPTFORGE: patch 19
+    if (setting->hasProperty("Cf/Texture/DepthControl") && setting->getString("Cf/Texture/DepthControl").isEmpty()) {
+        KisStrengthOptionData strength;   // patch 27: a depth without a control is the constant, whatever sensors the editor left on
+        strength.read(setting);
+        m_cfConstantDepth = true;
+        m_cfDepth = strength.strengthValue;
+    }
     KisTextureOptionData data;
     data.read(setting);
 
@@ -99,6 +130,8 @@ void KisTextureOption::fillProperties(const KisPropertiesConfiguration *setting,
     m_maskInfo = KisTextureMaskInfoCache::instance()->fetchCachedTextureInfo(m_maskInfo);
 
     m_enabled = data.isEnabled;
+    m_cfWasEnabled = m_enabled;
+    if (cfStrokeLevel(setting)) m_enabled = false;   // patch 27: the stroke does it as a whole
     m_offsetX = data.offsetX;
     m_offsetY = data.offsetY;
     m_isRandomOffsetX = data.isRandomOffsetX;
@@ -211,7 +244,7 @@ void KisTextureOption::applyLightness(KisFixedPaintDeviceSP dab, const QPoint& o
     fillMaskPainter.fillRect(kisGrowRect(maskPatchRect, 1), mask, maskBounds);
     fillMaskPainter.end();
 
-    qreal pressure = m_strengthOption.apply(info);
+    qreal pressure = (m_cfConstantDepth ? m_cfDepth : m_strengthOption.apply(info));
     quint8* dabData = dab->data();
 
     KisSequentialConstIterator it(fillMaskDevice, QRect(x, y, rect.width(), rect.height()));
@@ -245,7 +278,7 @@ void KisTextureOption::applyGradient(KisFixedPaintDeviceSP dab, const QPoint& of
     fillPainter.fillRect(kisGrowRect(maskPatchRect, 1), mask, maskBounds);
     fillPainter.end();
 
-    qreal pressure = m_strengthOption.apply(info);
+    qreal pressure = (m_cfConstantDepth ? m_cfDepth : m_strengthOption.apply(info));
     quint8* dabData = dab->data();
 
     //for gradient textures...
@@ -313,7 +346,7 @@ void KisTextureOption::apply(KisFixedPaintDeviceSP dab, const QPoint &offsetIn, 
     fillPainter.end();
 
     // Compute final strength
-    qreal strength = m_strengthOption.apply(info);
+    qreal strength = (m_cfConstantDepth ? m_cfDepth : m_strengthOption.apply(info));
 
     // Select mask compositing op
     KoChannelInfo::enumChannelValueType alphaChannelType = KoChannelInfo::UINT8;

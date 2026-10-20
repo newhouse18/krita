@@ -23,6 +23,7 @@ public:
 
     ///Reimplemented
     bool paintIncremental() override;
+    std::function<void(KisPaintDeviceSP, const QRect &)> cfStrokeProcessor() const override;   // CONCEPTFORGE: patch 27
 
     using KisPaintOpSettings::brushOutline;
     KisOptimizedBrushOutline brushOutline(const KisPaintInformation &info, const OutlineMode &mode, qreal alignForZoom) override;

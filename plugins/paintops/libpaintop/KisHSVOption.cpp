@@ -65,6 +65,14 @@ void KisHSVOption::apply(KoColorTransformation* transfo, const KisPaintInformati
     transfo->setParameter(8, false); //sets the compatibility to false.
 }
 
+qreal KisHSVOption::cfShift(const KisPaintInformation& info) const
+{
+    if (!isChecked()) return 0.0;
+    const qreal v = computeSizeLikeValue(info, false);
+    const qreal j = strengthValue();
+    return (v * j + (0.5 - j * 0.5)) * 2.0 - 1.0;
+}
+
 template <typename Data>
 Data KisHSVOption::initializeData(const KisPropertiesConfiguration *setting)
 {

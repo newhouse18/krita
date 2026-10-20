@@ -86,6 +86,7 @@ private:
 
 protected:
     KisMirrorOption m_mirrorOption;
+    bool m_cfSpacingMinor {false};  // CONCEPTFORGE: patch 26, spacing is a share of the tip's thinner side
     KisPrecisionOption m_precisionOption;
 };
 

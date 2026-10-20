@@ -291,8 +291,10 @@ void KisPainterBasedStrokeStrategy::initStrokeCallback()
                     const qreal cfWet = cfSettings->getDouble("Cf/WetEdges", 0.0);
                     indirect->setTemporaryWetEdges(cfWet > 0.0 ? cfWet : 0.0,
                                                    qBound(1.5, 0.2 * cfSettings->paintOpSize(), 40.0));
+                    indirect->setTemporaryProcessor(cfSettings->cfStrokeProcessor());   // patch 27
                 } else {
                     indirect->setTemporaryWetEdges(0.0, 0.0);
+                    indirect->setTemporaryProcessor({});
                 }
 
                 QBitArray channelLockFlags = m_resources->channelLockFlags();

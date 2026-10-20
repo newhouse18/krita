@@ -17,6 +17,8 @@
 #include <kis_paintop_preset.h>
 #include "KoCanvasResourcesIds.h"
 #include "kis_texture_option.h"
+#include <kis_fixed_paint_device.h>
+#include <QFile>
 #include <KoResourceCacheInterface.h>
 #include <KisOptimizedBrushOutline.h>
 
@@ -69,10 +71,28 @@ bool KisBrushBasedPaintOpSettings::paintIncremental()
 {
     // CONCEPTFORGE: Wet Edges needs the stroke painted as a whole, as in wash mode (patch 18)
     if (getDouble("Cf/WetEdges", 0.0) > 0.0) return false;
+    if (KisTextureOption::cfStrokeLevel(this)) return false;   // patch 27: the texture is put on the stroke as a whole
 
     KisPaintingModeOptionData data;
     data.read(this);
     return !data.hasPaintingModeProperty || data.paintingMode == enumPaintingMode::BUILDUP;
+}
+
+std::function<void(KisPaintDeviceSP, const QRect &)> KisBrushBasedPaintOpSettings::cfStrokeProcessor() const
+{
+    // CONCEPTFORGE: patch 27
+    if (!KisTextureOption::cfStrokeLevel(this)) return {};
+    QSharedPointer<KisTextureOption> option(new KisTextureOption(this, resourcesInterface(), canvasResourcesInterface(), 0,
+                                                                 SupportsGradientMode | SupportsLightnessMode));
+    option->cfMakeStrokeInstance();
+    return [option](KisPaintDeviceSP device, const QRect &rect) {
+        KisFixedPaintDeviceSP dab = new KisFixedPaintDevice(device->colorSpace());
+        dab->setRect(QRect(0, 0, rect.width(), rect.height()));   // the texture code takes the position from the offset
+        dab->lazyGrowBufferWithoutInitialization();
+        device->readBytes(dab->data(), rect);
+        option->apply(dab, rect.topLeft(), KisPaintInformation());
+        device->writeBytes(dab->data(), rect);
+    };
 }
 
 KisPaintOpSettingsSP KisBrushBasedPaintOpSettings::clone() const

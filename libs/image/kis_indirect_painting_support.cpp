@@ -28,6 +28,7 @@
 struct Q_DECL_HIDDEN KisIndirectPaintingSupport::Private {
     qreal wetEdgeStrength {0.0};  // CONCEPTFORGE: patch 18
     qreal wetEdgeRadius {0.0};
+    std::function<void(KisPaintDeviceSP, const QRect &)> processor;  // CONCEPTFORGE: patch 27
     // To simulate the indirect painting
     KisPaintDeviceSP temporaryTarget;
     QString compositeOp;
@@ -65,6 +66,11 @@ void KisIndirectPaintingSupport::setTemporaryCompositeOp(const QString &id)
     d->compositeOp = id;
 }
 
+void KisIndirectPaintingSupport::setTemporaryProcessor(std::function<void(KisPaintDeviceSP, const QRect &)> processor)
+{
+    d->processor = std::move(processor);
+}
+
 void KisIndirectPaintingSupport::setTemporaryWetEdges(qreal strength, qreal radius)
 {
     d->wetEdgeStrength = qBound(0.0, strength, 1.0);
@@ -96,44 +102,29 @@ void boxBlur(const std::vector<float> &in, std::vector<float> &out, int w, int h
 
 KisPaintDeviceSP KisIndirectPaintingSupport::wetEdgeSource(KisPaintDeviceSP src, const QRect &rect) const
 {
-    if (d->wetEdgeStrength <= 0.0 || !src || rect.isEmpty()) return src;
+    if ((d->wetEdgeStrength <= 0.0 && !d->processor) || !src || rect.isEmpty()) return src;
 
-    // The rim is where the stroke's own coverage, blurred over the radius, is still below one: at the
-    // outline the blur is one half, a radius inside it is one. Two box passes make the blur smooth.
-    const int r = qMax(1, qRound(d->wetEdgeRadius / 2.0));
-    const QRect big = kisGrowRect(rect, 2 * r + 1);
-    const int w = big.width();
-    const int h = big.height();
+    // Photoshop's Wet Edges, as measured on its own marks: the stroke's opacity a (all the dabs accumulated) is
+    // remapped, pixel by pixel, to 1.5 a up to one half, and from 0.75 at one half down to 0.59 at full opacity: the
+    // inside of the stroke is thinner than its rim, and a hard tip is a flat 59 percent.
     const KoColorSpace *cs = src->colorSpace();
     const int pixelSize = cs->pixelSize();
-
-    QByteArray bytes(w * h * pixelSize, 0);
-    src->readBytes(reinterpret_cast<quint8 *>(bytes.data()), big);
-    std::vector<float> a(size_t(w) * h), b(size_t(w) * h);
-    for (int i = 0; i < w * h; ++i) {
-        a[i] = cs->opacityF(reinterpret_cast<const quint8 *>(bytes.constData()) + i * pixelSize);
-    }
-    boxBlur(a, b, w, h, r, true);
-    boxBlur(b, a, w, h, r, false);
-    boxBlur(a, b, w, h, r, true);
-    boxBlur(b, a, w, h, r, false);
-
     KisPaintDeviceSP out = new KisPaintDevice(cs);
     KisPainter::copyAreaOptimized(rect.topLeft(), src, out, rect);
+    if (d->processor) d->processor(out, rect);   // patch 27: the texture of the whole stroke
+    if (d->wetEdgeStrength <= 0.0) return out;
     const int n = rect.width() * rect.height();
     QByteArray outBytes(n * pixelSize, 0);
     out->readBytes(reinterpret_cast<quint8 *>(outBytes.data()), rect);
-    QVector<quint8> mask(n);
-    for (int y = 0; y < rect.height(); ++y) {
-        for (int x = 0; x < rect.width(); ++x) {
-            const float blurred = a[size_t(y + rect.top() - big.top()) * w + (x + rect.left() - big.left())];
-            // 0 on the rim (blur <= 0.5), 1 inside (blur >= 1), smooth between
-            float t = qBound(0.0f, (blurred - 0.5f) * 2.0f, 1.0f);
-            t = t * t * (3.0f - 2.0f * t);
-            mask[y * rect.width() + x] = quint8(255.0f * (1.0f - float(d->wetEdgeStrength) * t) + 0.5f);
-        }
+    quint8 *p = reinterpret_cast<quint8 *>(outBytes.data());
+    const double strength = d->wetEdgeStrength;
+    for (int i = 0; i < n; ++i, p += pixelSize) {
+        const double a = cs->opacityF(p);
+        if (a <= 0.0) continue;
+        const double wet = qMin(1.5 * a, 0.75 - 0.322 * (a - 0.5));
+        const double result = a + strength * (wet - a);
+        cs->setOpacity(p, quint8(qBound(0.0, result * 255.0 + 0.5, 255.0)), 1);
     }
-    cs->applyAlphaU8Mask(reinterpret_cast<quint8 *>(outBytes.data()), mask.constData(), n);
     out->writeBytes(reinterpret_cast<const quint8 *>(outBytes.constData()), rect);
     return out;
 }

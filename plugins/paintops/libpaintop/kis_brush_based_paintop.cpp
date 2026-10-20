@@ -76,6 +76,7 @@ KisBrushBasedPaintOp::KisBrushBasedPaintOp(const KisPaintOpSettingsSP settings, 
       m_precisionOption(settings.data())
 {
     Q_ASSERT(settings);
+    m_cfSpacingMinor = settings->getBool("Cf/SpacingMinor", false);  // CONCEPTFORGE: patch 26
 
 #ifdef HAVE_THREADED_TEXT_RENDERING_WORKAROUND
     m_brush = TextBrushInitializationWorkaround::instance()->tryGetBrush(settings);
@@ -175,6 +176,16 @@ KisSpacingInformation KisBrushBasedPaintOp::effectiveSpacing(qreal scale, qreal 
 
     // we parse dab rotation separately, so don't count it
     QSizeF metric = m_brush->characteristicSize(KisDabShape(scale, 1.0, 0));
+
+    if (m_cfSpacingMinor) {
+        // CONCEPTFORGE: patch 26. Photoshop counts the spacing in shares of the thinner side of the tip (a tip of 60 and
+        // roundness 30 at spacing 150 steps 27 pixels, along its length or across it), measured on its own marks.
+        // (the sides of the tip itself, not of the box round it once it is turned)
+        const QSizeF own = m_brush->characteristicSize(KisDabShape(scale, 1.0, -m_brush->angle()));
+        const qreal minor = qMin(own.width(), own.height());
+        metric = QSizeF(minor, minor);
+        isotropicSpacing = true;
+    }
 
     return KisPaintOpPluginUtils::effectiveSpacing(metric.width(), metric.height(),
                                                    isotropicSpacing, rotation, implicitFlipped,

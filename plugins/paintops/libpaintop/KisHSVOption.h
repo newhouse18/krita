@@ -21,6 +21,10 @@ public:
 
     void apply(KoColorTransformation* transfo, const KisPaintInformation& info) const;
 
+    // CONCEPTFORGE: patch 27. The shift of saturation or value, -1 to 1, with the strength counted once (Krita's apply() counts
+    // it twice, which makes a jitter of 50 percent only reach downwards). 0 when the option is off.
+    qreal cfShift(const KisPaintInformation& info) const;
+
 private:
     KisHSVOption(const KisCurveOptionData &data);
 

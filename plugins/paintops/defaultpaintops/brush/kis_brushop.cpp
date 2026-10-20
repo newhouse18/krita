@@ -129,7 +129,16 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
     rotation += m_cf.angleJitterFor(info);  // CONCEPTFORGE: patch 23
     qreal ratio = m_ratioOption.apply(info) * m_cf.tipRoundness;  // CONCEPTFORGE: patch 23
 
-    KisDabShape shape(scale, ratio, rotation);
+    // CONCEPTFORGE: patch 26. A Photoshop soft tip reaches past its size: its mask is drawn bigger (the spacing keeps the size)
+    if (m_cf.roundTip && m_cf.softScale < 1.1) {
+        // CONCEPTFORGE: patch 26. A thin hard tip is about one pixel thicker in Photoshop (a 4 pixel line comes out 5 pixels
+        // thick, measured on its marks): the edge antialiasing adds to the thin side
+        const KisDabShape plain(scale, ratio, rotation);
+        const qreal w = brush->maskWidth(plain, 0, 0, info), h = brush->maskHeight(plain, 0, 0, info);
+        const qreal major = qMax(w, h), minor = qMin(w, h);
+        if (minor > 0.3 && minor < 8.0 && minor < 0.5 * major) ratio *= (minor + 1.0) / minor;
+    }
+    KisDabShape shape(scale * m_cf.softScale, ratio, rotation);
 
     qreal dabOpacity = OPACITY_OPAQUE_F;
     qreal dabFlow = OPACITY_OPAQUE_F;
@@ -141,8 +150,8 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
     for (int cfMark = 0; cfMark < cfCount; ++cfMark) {
         const QPointF cursorPos =
             m_scatterOption.apply(info,
-                                  brush->maskWidth(shape, 0, 0, info),
-                                  brush->maskHeight(shape, 0, 0, info));
+                                  brush->maskWidth(shape, 0, 0, info) / m_cf.softScale,   // patch 26: the tip's size, not the bigger mask
+                                  brush->maskHeight(shape, 0, 0, info) / m_cf.softScale);
 
         KisDabCacheUtils::DabRequestInfo request(painter()->paintColor(),
                                                  cursorPos,

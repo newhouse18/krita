@@ -12,6 +12,8 @@
 #include "kis_types.h"
 
 #include <mutex>
+#include <functional>
+#include <QRect>
 
 class QBitArray;
 class KisUndoAdapter;
@@ -49,6 +51,9 @@ public:
     // CONCEPTFORGE: Photoshop's Wet Edges (patch 18). strength is the share of opacity the inside of the
     // stroke loses (0 = off), radius the width in pixels over which the rim turns into the inside.
     void setTemporaryWetEdges(qreal strength, qreal radius);
+
+    // CONCEPTFORGE: patch 27. A change made to the whole stroke when it is composed (see KisPaintOpSettings::cfStrokeProcessor)
+    void setTemporaryProcessor(std::function<void(KisPaintDeviceSP, const QRect &)> processor);
 
     /**
      * What to compose into `rect` from the temporary target: the target itself, or, with wet edges, a

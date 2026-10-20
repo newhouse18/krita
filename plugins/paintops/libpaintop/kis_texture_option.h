@@ -37,6 +37,9 @@ public:
                      KisBrushTextureFlags flags = None);
 
     bool m_enabled {false};
+    bool m_cfConstantDepth {false};
+    qreal m_cfDepth {1.0};
+    bool m_cfWasEnabled {false};
     bool m_cfEachTip {false};  // CONCEPTFORGE: the pattern starts again at every dab (patch 19)
 
     /**
@@ -49,6 +52,12 @@ public:
     static QList<KoResourceLoadResult> prepareLinkedResources(const KisPropertiesConfigurationSP setting, KisResourcesInterfaceSP resourcesInterface);
     static QList<KoResourceLoadResult> prepareEmbeddedResources(const KisPropertiesConfigurationSP setting, KisResourcesInterfaceSP resourcesInterface);
     bool applyingGradient() const;
+
+    // CONCEPTFORGE: patch 27. Photoshop puts a brush texture on the stroke as a whole unless "Texture Each Tip" is on: such a
+    // preset (key Cf/Texture/StrokeLevel, texture on, not each tip, depth without a control) has the dab-level option off,
+    // and its settings give a processor that does the same on the composed stroke.
+    static bool cfStrokeLevel(const KisPropertiesConfiguration *setting);
+    void cfMakeStrokeInstance() { m_enabled = m_cfWasEnabled; }
 
     static bool applyingGradient(const KisPropertiesConfiguration *settings);
     static bool requiresEffectiveCompositeOp(const KisPropertiesConfiguration *settings);

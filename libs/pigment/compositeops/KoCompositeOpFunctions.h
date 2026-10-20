@@ -687,7 +687,9 @@ struct CFHardMixPhotoshop : KoClampedSourceAndDestinationCompositeOpGenericFunct
 
         const composite_type sum = composite_type(src) + dst;
 
-        return sum > unitValue<T>() ? unitValue<T>() : zeroValue<T>();
+        // CONCEPTFORGE: patch 27. Photoshop's Hard Mix is full when the sum reaches the unit value (>=), measured on its
+        // brush texture over a solid mark: a pattern pixel of 0 under a full tip stays full.
+        return sum >= unitValue<T>() ? unitValue<T>() : zeroValue<T>();
     }
 };
 
