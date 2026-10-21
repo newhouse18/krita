@@ -140,7 +140,22 @@ struct Extras
     // How many times the tip's size the dab has to be drawn so that the dots fit (a soft or wide-spread bristle brush reaches far past its size)
     static double bristleExtent(int shape, double stiffness, double spacing)
     {
-        return qBound(1.0, 2.0 * bristleShape(shape).spread * bristleStiffnessSpread(stiffness) * bristleGather(spacing) + 0.12, 8.0);
+        const double swing = shape == 0 ? bristleSwingAmp(stiffness) * 2.0 + 0.5 : 0.0;   // the soft pen's swinging bristles
+        return qBound(1.0, qMax(swing, 2.0 * bristleShape(shape).spread * bristleStiffnessSpread(stiffness) * bristleGather(spacing)) + 0.12, 8.0);
+    }
+
+    // How far a soft fountain pen's loose bristles swing from the stroke's middle, in sizes (lab 4: stiffness 25 percent reaches 1.9 sizes either side, 50 percent 1.2,
+    // 70 percent a little, 85 percent none). Photoshop's bristles are lines that wander across the stroke in slow waves; the middle stays solid.
+    static double bristleSwingAmp(double stiffness)
+    {
+        static const double table[][2] = {{0.1, 0.0}, {0.25, 1.8}, {0.5, 1.1}, {0.7, 0.4}, {0.8, 0.0}};
+        if (stiffness <= table[0][0]) return 0.0;
+        for (int i = 1; i < 5; ++i) {
+            if (stiffness <= table[i][0]) {
+                return table[i - 1][1] + (stiffness - table[i - 1][0]) / (table[i][0] - table[i - 1][0]) * (table[i][1] - table[i - 1][1]);
+            }
+        }
+        return 0.0;
     }
 
     // Photoshop's bristle tip (patch 29), fitted to its own strokes (lab 4): a dab is a handful of tiny dots at random places in a disc, and the
@@ -221,18 +236,41 @@ struct Extras
                 break;
             }
         }
+        const double baseCount = count;
         count *= sh.dots / 30.0 * std::pow(widen, 1.3);   // the dots grow with the area, but Photoshop's soft bristles stay sparser than that
         count *= spacing <= 0.05 ? 1.0 : spacing <= 0.25 ? 1.0 - (spacing - 0.05) / 0.2 * 0.5 : spacing <= 1.0 ? 0.5 + (spacing - 0.25) / 0.75 * 0.25 : 0.75;   // fewer dots at a wide spacing (lab 4)
         count *= 1.0 + 0.3 * qBound(0.0, (0.25 - spacing) / 0.2, 1.0);   // a close spacing: more dots than the table says, the dabs being fewer than Photoshop's (lab 4)
         count = qMin(count, 1500.0);
         int dots = int(count) + (rng->generateDouble() < count - int(count) ? 1 : 0);
+        // a soft fountain pen: a fixed set of bristles, each a line that swings across the stroke (the dab number is the place along the stroke)
+        const double swingAmp = shape == 0 ? bristleSwingAmp(stiffness) : 0.0;
+        const bool swing = swingAmp > 0.0;
+        if (swing) dots = qBound(150, int(baseCount * 20.0), 700);
+        const double along = dabSeqNo * spacing / 1.72;   // sizes along the stroke
         std::vector<float> keep(size_t(w) * h, 1.0f);   // what is left of the dab's transparency: the product of (1 - the dots' opacity)
         const double cx = w / 2.0, cy = h / 2.0, reach = diameter / 2.0 + 1.0;
         const double across = direction + M_PI / 2.0;   // a row of bristles lies across the stroke
-        for (int k = (shape == 0 ? 0 : 1); k <= dots; ++k) {   // the first dot is the middle one, of the fountain pen's shape only
+        for (int k = (shape == 0 && !swing ? 0 : 1); k <= dots; ++k) {   // the first dot is the middle one, of the fountain pen's shape only
             double x = cx, y = cy;
             double dotAlpha = 1.0;
-            if (k > 0) {
+            if (swing) {
+                auto unit = [k](quint32 salt) { return bristleHash(quint32(k), salt) / 4294967296.0; };
+                double lateral;
+                if (unit(11u) < 0.45) {
+                    lateral = (2.0 * unit(12u) - 1.0) * 0.38 * size;   // the solid middle
+                    dotAlpha = 1.0;
+                } else {
+                    const double amp = swingAmp * 1.0 * std::pow(unit(13u), 0.8) * size;
+                    // the bristles swing together in one slow wave (the stroke's hills), each with a wave of its own on top
+                    const double common = std::sin(2.0 * M_PI * along / 9.0 + 1.3) * (unit(19u) < 0.5 ? 1.0 : -1.0);
+                    const double wave = 0.55 * common + 0.45 * std::sin(2.0 * M_PI * along / (6.0 + 6.0 * unit(14u)) + 6.2832 * unit(15u));
+                    lateral = (2.0 * unit(18u) - 1.0) * 0.25 * size + amp * (0.35 + 0.65 * wave) * (unit(19u) < 0.5 ? 1.0 : -1.0);
+                    dotAlpha = 0.5;
+                }
+                lateral = qBound(-0.95 * qMin(cx, cy), lateral, 0.95 * qMin(cx, cy));
+                x += lateral * std::cos(across);
+                y += lateral * std::sin(across);
+            } else if (k > 0) {
                 const quint32 phase = bristleHash(quint32(k), 77u) % quint32(lifetime);
                 const quint32 segment = quint32((dabSeqNo + int(phase)) / lifetime);
                 const quint32 hs = bristleHash(quint32(k), segment);
