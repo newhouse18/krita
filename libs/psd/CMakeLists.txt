@@ -1,5 +1,6 @@
 set(kritapsd_SRCS
     psd_additional_layer_info_block.cpp
+    psd_adjustment_export.cpp
     psd_header.cpp
     psd_layer_record.cpp
     psd_layer_section.cpp

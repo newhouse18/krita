@@ -13,6 +13,7 @@
 #include <KoColorSpace.h>
 
 #include <kis_debug.h>
+#include <kis_adjustment_layer.h>
 #include <kis_effect_mask.h>
 #include <kis_group_layer.h>
 #include <kis_generator_layer.h>
@@ -39,6 +40,7 @@
 #include "kis_dom_utils.h"
 
 #include "psd.h"
+#include "psd_adjustment_export.h"
 #include "psd_header.h"
 #include "psd_utils.h"
 
@@ -968,6 +970,11 @@ void PSDLayerMaskSection::writePsdImpl(QIODevice &io, KisNodeSP rootLayer, psd_c
 
                 layerRecord->fillType = fillType;
                 layerRecord->fillConfig = fillConfig;
+
+                // CONCEPTFORGE: patch 31. A filter layer goes out as the matching Photoshop adjustment layer when there is one
+                if (const KisAdjustmentLayer *adjustmentLayer = qobject_cast<KisAdjustmentLayer *>(node.data())) {
+                    PsdAdjustmentExport::encode(adjustmentLayer->filter(), layerRecord->adjustmentKey, layerRecord->adjustmentData);
+                }
 
                 layerRecord->vectorMask = vectorMask;
                 layerRecord->vectorStroke = strokeData;

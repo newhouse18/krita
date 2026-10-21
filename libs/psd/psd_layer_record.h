@@ -133,6 +133,9 @@ public:
 
     int labelColor {0};
 
+    // CONCEPTFORGE: patch 31, the tagged block of an adjustment layer (key and data), empty for any other layer
+    QByteArray adjustmentKey;
+    QByteArray adjustmentData;
     psd_fill_type fillType {psd_fill_solid_color};
     QDomDocument fillConfig;
 

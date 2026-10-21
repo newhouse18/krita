@@ -679,6 +679,17 @@ void PSDLayerRecord::writeImpl(QIODevice &io,
                 additionalInfoBlock.writeLsctBlockEx(io, sectionType, isPassThrough, blendModeKey);
             }
 
+            // CONCEPTFORGE: patch 31, the adjustment layer's own block (curv, hue2, ...)
+            if (!adjustmentKey.isEmpty()) {
+                KisAslWriterUtils::writeFixedString<byteOrder>("8BIM", io);
+                KisAslWriterUtils::writeFixedString<byteOrder>(QString::fromLatin1(adjustmentKey), io);
+                const quint32 adjustmentLength = adjustmentData.size();
+                SAFE_WRITE_EX(byteOrder, io, adjustmentLength);
+                if (io.write(adjustmentData) != adjustmentData.size()) {
+                    throw KisAslWriterUtils::ASLWriteException(PREPEND_METHOD("could not write an adjustment block"));
+                }
+            }
+
             // write 'lfx2' data block
             if (!stylesXmlDoc.isNull()) {
                 additionalInfoBlock.writeLfx2BlockEx(io, stylesXmlDoc, useLfxsLayerStyleFormat);
