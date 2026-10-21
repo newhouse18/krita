@@ -12,6 +12,8 @@
 #ifndef CF_BRUSH_EXTRAS_H
 #define CF_BRUSH_EXTRAS_H
 
+#include <vector>
+#include <cmath>
 #include <QRandomGenerator>
 #include <QVector>
 
@@ -122,6 +124,56 @@ struct Extras
         if (!tiltAngle || info.isHoveringMode()) return 0.0;
         if (info.xTilt() == 0.0 && info.yTilt() == 0.0) return 0.0;
         return std::atan2(info.xTilt(), info.yTilt());
+    }
+
+    // Photoshop's bristle tip (patch 29), fitted to its own strokes (lab 4): a dab is a handful of tiny dots at random places in a disc, and the
+    // stroke is the many dabs laid over one another, so the middle is solid and the edge ragged. The disc is 0.47 of the size across, a dab has about
+    // 40 dots at a bristle density of 31 percent (fewer, as the 1.3 power of the density), each 1.6 pixels at size 60 (more with the bristle thickness,
+    // and the square root of the size), and one dot is always in the middle (the dark line of a sparse brush). Replaces the dab's opacity.
+    static void applyBristles(KisFixedPaintDeviceSP dab, double density, double thickness)
+    {
+        if (!dab || density <= 0.0) return;
+        const QRect bounds = dab->bounds();
+        const int w = bounds.width(), h = bounds.height();
+        if (w < 2 || h < 2) return;
+        const double size = qMax(w, h) / 1.05;
+        const double radius = 0.222 * size;
+        const double diameter = (1.6 + 5.4 * qBound(0.0, thickness, 1.0)) * std::sqrt(size / 60.0);
+        QRandomGenerator *rng = QRandomGenerator::global();
+        // the dots per dab by bristle density, from Photoshop's strokes at densities 5, 15, 31, 60 and 100 (the stroke gets solid quicker than the count grows)
+        static const double table[][2] = {{0.0, 0.0}, {0.05, 3.8}, {0.15, 12.0}, {0.31, 30.0}, {0.6, 48.0}, {1.0, 60.0}};
+        double count = table[5][1];
+        for (int i = 1; i < 6; ++i) {
+            if (density <= table[i][0]) {
+                count = table[i - 1][1] + (density - table[i - 1][0]) / (table[i][0] - table[i - 1][0]) * (table[i][1] - table[i - 1][1]);
+                break;
+            }
+        }
+        int dots = int(count) + (rng->generateDouble() < count - int(count) ? 1 : 0);
+        std::vector<float> keep(size_t(w) * h, 1.0f);   // what is left of the dab's transparency: the product of (1 - the dots' opacity)
+        const double cx = w / 2.0, cy = h / 2.0, reach = diameter / 2.0 + 1.0;
+        for (int k = 0; k <= dots; ++k) {
+            double x = cx, y = cy;
+            if (k > 0) {   // the first dot is the middle one
+                const double a = 2.0 * M_PI * rng->generateDouble(), r = radius * std::pow(rng->generateDouble(), 0.6);   // a little more of them near the middle
+                x += r * std::cos(a);
+                y += r * std::sin(a);
+            }
+            const int x0 = qMax(0, int(x - reach)), x1 = qMin(w - 1, int(x + reach)), y0 = qMax(0, int(y - reach)), y1 = qMin(h - 1, int(y + reach));
+            for (int py = y0; py <= y1; ++py) {
+                for (int px = x0; px <= x1; ++px) {
+                    const double dist = std::sqrt((px + 0.5 - x) * (px + 0.5 - x) + (py + 0.5 - y) * (py + 0.5 - y));
+                    const double a = qBound(0.0, diameter / 2.0 + 0.5 - dist, 1.0);
+                    if (a > 0.0) keep[size_t(py) * w + px] *= float(1.0 - qMin(a, 0.999));
+                }
+            }
+        }
+        const KoColorSpace *cs = dab->colorSpace();
+        const int pixelSize = cs->pixelSize();
+        quint8 *p = dab->data();
+        for (size_t i = 0; i < size_t(w) * h; ++i, p += pixelSize) {
+            cs->setOpacity(p, quint8(qBound(0.0, (1.0 - keep[i]) * 255.0 + 0.5, 255.0)), 1);
+        }
     }
 
     // Angle Jitter: a random turn on top of the angle (radians)

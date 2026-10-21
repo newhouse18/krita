@@ -98,6 +98,8 @@ KisBrushOpResources::KisBrushOpResources(const KisPaintOpSettingsSP settings, Ki
     // CONCEPTFORGE: patch 17. Noise is put on the whole stroke when it is composed (KisBrushBasedPaintOpSettings::cfStrokeProcessor,
     // patch 27), as Photoshop does: per dab, the overlapping dabs would average it out at the edge. So cfNoise stays 0 here.
     cfNoise = 0.0;
+    cfBristle = qBound(0.0, settings->getDouble("Cf/Bristle/Density", 0.0), 1.0);   // CONCEPTFORGE: patch 29
+    cfBristleThickness = qBound(0.0, settings->getDouble("Cf/Bristle/Thickness", 0.0), 1.0);
 
     textureOption.reset(new KisTextureOption(settings.data(),
                                              settings->resourcesInterface(),

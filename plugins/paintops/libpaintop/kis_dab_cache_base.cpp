@@ -286,6 +286,6 @@ void KisDabCacheBase::fetchDabGenerationInfo(bool hasDabInCache,
         m_d->lastSavedDabParameters = newParams;
     }
 
-    di->needsPostprocessing = needSeparateOriginal(resources->textureOption.get(), resources->sharpnessOption.get(), resources->cfNoise > 0.0);
+    di->needsPostprocessing = needSeparateOriginal(resources->textureOption.get(), resources->sharpnessOption.get(), resources->cfNoise > 0.0 || resources->cfBristle > 0.0);
 }
 

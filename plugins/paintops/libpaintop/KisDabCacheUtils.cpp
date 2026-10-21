@@ -104,6 +104,11 @@ void postProcessDab(KisFixedPaintDeviceSP dab,
         resources->textureOption->apply(dab, dabTopLeft, info);
     }
 
+    // CONCEPTFORGE: a bristle tip's dots (patch 29)
+    if (resources->cfBristle > 0.0) {
+        CfBrushExtras::Extras::applyBristles(dab, resources->cfBristle, resources->cfBristleThickness);
+    }
+
     // CONCEPTFORGE: Noise (patch 17)
     if (resources->cfNoise > 0.0) {
         CfBrushExtras::Extras extras;

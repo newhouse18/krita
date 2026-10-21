@@ -29,5 +29,5 @@ void KisDabRenderingQueueCache::getDabType(bool hasDabInCache, KisDabCacheUtils:
 
 bool KisDabRenderingQueueCache::hasSeparateOriginal(KisDabCacheUtils::DabRenderingResources *resources) const
 {
-    return needSeparateOriginal(resources->textureOption.get(), resources->sharpnessOption.get(), resources->cfNoise > 0.0);  // CONCEPTFORGE: patch 17
+    return needSeparateOriginal(resources->textureOption.get(), resources->sharpnessOption.get(), resources->cfNoise > 0.0 || resources->cfBristle > 0.0);  // CONCEPTFORGE: patch 17
 }

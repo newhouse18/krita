@@ -45,6 +45,8 @@ struct PAINTOP_EXPORT DabRenderingResources
     std::unique_ptr<KisSharpnessOption> sharpnessOption;
     std::unique_ptr<KisTextureOption> textureOption;
     qreal cfNoise {0.0};  // CONCEPTFORGE: Photoshop's Noise (patch 17), 0 = off
+    qreal cfBristle {0.0};            // CONCEPTFORGE: Photoshop's bristle tip (patch 29): the bristle density, 0 = off
+    qreal cfBristleThickness {0.0};   // and the bristle thickness
 
     KisPaintDeviceSP colorSourceDevice;
 
