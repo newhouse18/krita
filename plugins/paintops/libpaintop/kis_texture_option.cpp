@@ -54,12 +54,75 @@ KisTextureOption::KisTextureOption(const KisPropertiesConfiguration *setting,
     fillProperties(setting, resourcesInterface, canvasResourcesInterface);
 }
 
+// CONCEPTFORGE: patch 7. How many extra textures the brush's variation set holds (0 when the switch is off or the set is empty)
+int KisTextureOption::cfVariationCount(const KisPropertiesConfiguration *setting)
+{
+    if (!setting || !setting->getBool("Cf/TexVar/On", false)) return 0;
+    return qBound(0, setting->getInt("Cf/TexVar/Count", 0), 64);
+}
+
+namespace {
+QAtomicInt s_cfStrokeCounter;
+
+quint32 cfMix(quint32 a, quint32 b)
+{
+    quint32 x = a * 0x9E3779B1u ^ (b + 0x7F4A7C15u) * 0x85EBCA6Bu;
+    x ^= x >> 15; x *= 0x2C1B3C6Du; x ^= x >> 12; x *= 0x297A2D39u; x ^= x >> 15;
+    return x;
+}
+
+// The shuffled order of one block of ``count`` textures
+QVector<int> cfPermutation(int count, quint32 seed, quint32 block, int notFirst)
+{
+    QVector<int> order(count);
+    for (int i = 0; i < count; ++i) order[i] = i;
+    for (int i = count - 1; i > 0; --i) {
+        const int j = int(cfMix(seed ^ (block * 2654435761u), quint32(i)) % quint32(i + 1));
+        std::swap(order[i], order[j]);
+    }
+    if (count > 1 && order[0] == notFirst) std::swap(order[0], order[1]);   // never the same texture twice in a row
+    return order;
+}
+}  // namespace
+
+int KisTextureOption::cfVariantIndex(const KisPaintInformation &info) const
+{
+    const int count = m_cfSet.size();
+    if (count < 2) return 0;
+    const qreal every = qMax(0.01, m_cfEvery);
+    qint64 n;
+    quint32 seed = 0x51ed270bu;
+    if (m_cfStrokeInstance || m_cfTrigger == 1) {
+        n = qint64(m_cfStroke / every);
+    } else if (m_cfTrigger == 2) {
+        n = qint64(info.currentTime() / (1000.0 * every));
+        seed = quint32(info.perStrokeRandomSource()->generate("texvar_seed", 0, 1 << 30));
+    } else {
+        n = qint64(info.currentDabSeqNo() / every);
+        seed = quint32(info.perStrokeRandomSource()->generate("texvar_seed", 0, 1 << 30));
+    }
+    if (m_cfOrder == 0) return int(n % count);
+    const quint32 block = quint32(n / count);
+    int lastOfPrevious = -1;
+    if (block > 0) lastOfPrevious = cfPermutation(count, seed, block - 1, -1).last();
+    return cfPermutation(count, seed, block, lastOfPrevious).at(int(n % count));
+}
+
+KisTextureMaskInfoSP KisTextureOption::cfMaskFor(const KisPaintInformation &info) const
+{
+    if (m_cfSet.isEmpty()) return m_maskInfo;
+    const KisTextureMaskInfoSP chosen = m_cfSet.at(cfVariantIndex(info));
+    return chosen && chosen->isValid() ? chosen : m_maskInfo;
+}
+
 bool KisTextureOption::cfStrokeLevel(const KisPropertiesConfiguration *setting)
 {
     if (!setting || !setting->getBool("Cf/Texture/StrokeLevel", false) || setting->getBool("Cf/Texture/EachTip", false)) return false;
     KisTextureOptionData data;
     data.read(setting);
     if (!data.isEnabled || data.textureData.isNull()) return false;
+    // patch 7: a texture that changes with every dab or over time has to be applied per dab
+    if (cfVariationCount(setting) > 0 && setting->getInt("Cf/TexVar/Trigger", 0) != 1) return false;
     // Photoshop ignores a depth jitter or fade on a texture that goes on the whole stroke (measured, lab 3): whatever the
     // depth follows, the stroke gets the constant depth.
     return true;
@@ -116,6 +179,32 @@ void KisTextureOption::fillProperties(const KisPropertiesConfiguration *setting,
 
     m_maskInfo = KisTextureMaskInfoCache::instance()->fetchCachedTextureInfo(m_maskInfo);
 
+    // CONCEPTFORGE: patch 7. The variation set: one mask for the main texture and one for each extra one, all made now so that
+    // changing the texture while painting costs nothing
+    if (const int extra = cfVariationCount(setting)) {
+        m_cfOrder = setting->getInt("Cf/TexVar/Order", 0);
+        m_cfTrigger = setting->getInt("Cf/TexVar/Trigger", 0);
+        m_cfEvery = setting->getDouble("Cf/TexVar/Every", 1.0);
+        m_cfStroke = s_cfStrokeCounter.fetchAndAddRelaxed(1);
+        m_cfSet << m_maskInfo;
+        for (int i = 0; i < extra; ++i) {
+            KisEmbeddedTextureData variant;
+            variant.read(setting, QStringLiteral("Cf/TexVar/%1/").arg(i));
+            if (variant.isNull()) continue;
+            KisPropertiesConfiguration copy(*setting);
+            copy.setProperty("Texture/Pattern/PatternMD5", variant.md5Base64);
+            copy.setProperty("Texture/Pattern/PatternMD5Sum", variant.md5sum);
+            copy.setProperty("Texture/Pattern/PatternFileName", variant.fileName);
+            copy.setProperty("Texture/Pattern/Name", variant.name);
+            copy.setProperty("Texture/Pattern/Pattern", variant.patternBase64);
+            KisTextureMaskInfoSP mask = toQShared(new KisTextureMaskInfo(m_levelOfDetail, preserveAlpha));
+            if (mask->fillProperties(&copy, resourcesInterface, additionalInvert)) {
+                m_cfSet << KisTextureMaskInfoCache::instance()->fetchCachedTextureInfo(mask);
+            }
+        }
+        if (m_cfSet.size() < 2) m_cfSet.clear();
+    }
+
     m_enabled = data.isEnabled;
     m_cfWasEnabled = m_enabled;
     if (cfStrokeLevel(setting)) m_enabled = false;   // patch 27: the stroke does it as a whole
@@ -164,6 +253,13 @@ QList<KoResourceLoadResult> KisTextureOption::prepareEmbeddedResources(const Kis
     if (data.isEnabled && !data.textureData.patternBase64.isEmpty()) {
         patterns << data.textureData.loadLinkedPattern(resourcesInterface);
     }
+    if (data.isEnabled) {   // CONCEPTFORGE: patch 7, the extra textures of the variation set
+        for (int i = 0, n = cfVariationCount(setting.data()); i < n; ++i) {
+            KisEmbeddedTextureData variant;
+            variant.read(setting.data(), QStringLiteral("Cf/TexVar/%1/").arg(i));
+            if (!variant.isNull() && !variant.patternBase64.isEmpty()) patterns << variant.loadLinkedPattern(resourcesInterface);
+        }
+    }
 
     return patterns;
 }
@@ -182,6 +278,13 @@ QList<KoResourceLoadResult> KisTextureOption::prepareLinkedResources(const KisPr
 
     if (data.isEnabled && data.textureData.patternBase64.isEmpty()) {
         patterns << data.textureData.loadLinkedPattern(resourcesInterface);
+    }
+    if (data.isEnabled) {   // CONCEPTFORGE: patch 7
+        for (int i = 0, n = cfVariationCount(setting.data()); i < n; ++i) {
+            KisEmbeddedTextureData variant;
+            variant.read(setting.data(), QStringLiteral("Cf/TexVar/%1/").arg(i));
+            if (!variant.isNull() && variant.patternBase64.isEmpty()) patterns << variant.loadLinkedPattern(resourcesInterface);
+        }
     }
 
     return patterns;
@@ -210,13 +313,14 @@ bool KisTextureOption::requiresEffectiveCompositeOp(const KisPropertiesConfigura
 
 
 void KisTextureOption::applyLightness(KisFixedPaintDeviceSP dab, const QPoint& offset, const KisPaintInformation& info) {
+    const KisTextureMaskInfoSP maskInfo = cfMaskFor(info);   // CONCEPTFORGE: patch 7
     if (!m_enabled) return;
-    if (!m_maskInfo->isValid()) return;
+    if (!maskInfo->isValid()) return;
 
-    KisPaintDeviceSP mask = m_maskInfo->mask();
+    KisPaintDeviceSP mask = maskInfo->mask();
 
     const QRect rect = dab->bounds();
-    const QRect maskBounds = m_maskInfo->maskBounds();
+    const QRect maskBounds = maskInfo->maskBounds();
 
     KisCachedPaintDevice::Guard g(mask, KoColorSpaceRegistry::instance()->rgb8(), m_cachedPaintDevice);
     KisPaintDeviceSP fillMaskDevice = g.device();
@@ -243,13 +347,14 @@ void KisTextureOption::applyLightness(KisFixedPaintDeviceSP dab, const QPoint& o
 }
 
 void KisTextureOption::applyGradient(KisFixedPaintDeviceSP dab, const QPoint& offset, const KisPaintInformation& info) {
+    const KisTextureMaskInfoSP maskInfo = cfMaskFor(info);   // CONCEPTFORGE: patch 7
     if (!m_enabled) return;
-    if (!m_maskInfo->isValid()) return;
+    if (!maskInfo->isValid()) return;
 
     KIS_SAFE_ASSERT_RECOVER_RETURN(m_gradient && m_gradient->valid());
 
-    KisPaintDeviceSP mask = m_maskInfo->mask();
-    const QRect maskBounds = m_maskInfo->maskBounds();
+    KisPaintDeviceSP mask = maskInfo->mask();
+    const QRect maskBounds = maskInfo->maskBounds();
     QRect rect = dab->bounds();
 
     KisCachedPaintDevice::Guard g(mask, KoColorSpaceRegistry::instance()->rgb8(), m_cachedPaintDevice);
@@ -300,11 +405,12 @@ void KisTextureOption::applyGradient(KisFixedPaintDeviceSP dab, const QPoint& of
 
 void KisTextureOption::apply(KisFixedPaintDeviceSP dab, const QPoint &offsetIn, const KisPaintInformation & info)
 {
+    const KisTextureMaskInfoSP maskInfo = cfMaskFor(info);   // CONCEPTFORGE: patch 7
     // CONCEPTFORGE: Photoshop's Texture Each Tip: the pattern is laid on every dab from its own corner,
     // not on the canvas, so each dab carries the same texture (patch 19)
     const QPoint offset = m_cfEachTip ? QPoint(0, 0) : offsetIn;
     if (!m_enabled) return;
-    if (!m_maskInfo->isValid()) return;
+    if (!maskInfo->isValid()) return;
 
     if (m_texturingMode == KisTextureOptionData::LIGHTNESS) {
         applyLightness(dab, offset, info);
@@ -316,8 +422,8 @@ void KisTextureOption::apply(KisFixedPaintDeviceSP dab, const QPoint &offsetIn, 
     }
 
     QRect rect = dab->bounds();
-    KisPaintDeviceSP mask = m_maskInfo->mask();
-    const QRect maskBounds = m_maskInfo->maskBounds();
+    KisPaintDeviceSP mask = maskInfo->mask();
+    const QRect maskBounds = maskInfo->maskBounds();
 
     KisCachedPaintDevice::Guard g(mask, KoColorSpaceRegistry::instance()->alpha8(), m_cachedPaintDevice);
     KisPaintDeviceSP maskPatch = g.device();

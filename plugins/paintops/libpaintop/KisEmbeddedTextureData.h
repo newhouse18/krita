@@ -36,8 +36,9 @@ public:
     static KisEmbeddedTextureData fromPattern(KoPatternSP pattern);
     KoResourceLoadResult loadLinkedPattern(KisResourcesInterfaceSP resourcesInterface) const;
 
-    bool read(const KisPropertiesConfiguration *setting);
-    void write(KisPropertiesConfiguration *setting) const;
+    // CONCEPTFORGE: patch 7 (texture variation): the keys of an extra texture of a set carry a prefix (Cf/TexVar/<n>/)
+    bool read(const KisPropertiesConfiguration *setting, const QString &prefix = QString());
+    void write(KisPropertiesConfiguration *setting, const QString &prefix = QString()) const;
 
 private:
     KoResourceLoadResult tryFetchPattern(KisResourcesInterfaceSP resourcesInterface) const;

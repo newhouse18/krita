@@ -80,21 +80,21 @@ KoResourceLoadResult KisEmbeddedTextureData::loadLinkedPattern(KisResourcesInter
     return result;
 }
 
-bool KisEmbeddedTextureData::read(const KisPropertiesConfiguration *setting)
+bool KisEmbeddedTextureData::read(const KisPropertiesConfiguration *setting, const QString &prefix)
 {
-    md5Base64 = setting->getString("Texture/Pattern/PatternMD5");
-    md5sum = setting->getString("Texture/Pattern/PatternMD5Sum");
-    fileName = QFileInfo(setting->getString("Texture/Pattern/PatternFileName")).fileName();
-    name = setting->getString("Texture/Pattern/Name");
-    patternBase64 = setting->getString("Texture/Pattern/Pattern");
+    md5Base64 = setting->getString(prefix + "Texture/Pattern/PatternMD5");
+    md5sum = setting->getString(prefix + "Texture/Pattern/PatternMD5Sum");
+    fileName = QFileInfo(setting->getString(prefix + "Texture/Pattern/PatternFileName")).fileName();
+    name = setting->getString(prefix + "Texture/Pattern/Name");
+    patternBase64 = setting->getString(prefix + "Texture/Pattern/Pattern");
 
     return true;
 }
 
-void KisEmbeddedTextureData::write(KisPropertiesConfiguration *setting) const
+void KisEmbeddedTextureData::write(KisPropertiesConfiguration *setting, const QString &prefix) const
 {
-    setting->setProperty("Texture/Pattern/PatternMD5", md5Base64);
-    setting->setProperty("Texture/Pattern/PatternMD5Sum", md5sum);
-    setting->setProperty("Texture/Pattern/PatternFileName", fileName);
-    setting->setProperty("Texture/Pattern/Name", name);
+    setting->setProperty(prefix + "Texture/Pattern/PatternMD5", md5Base64);
+    setting->setProperty(prefix + "Texture/Pattern/PatternMD5Sum", md5sum);
+    setting->setProperty(prefix + "Texture/Pattern/PatternFileName", fileName);
+    setting->setProperty(prefix + "Texture/Pattern/Name", name);
 }
