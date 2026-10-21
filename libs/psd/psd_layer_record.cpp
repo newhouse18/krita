@@ -404,7 +404,7 @@ bool PSDLayerRecord::readImpl(QIODevice &io)
                     layerMask.positionedRelativeToLayer = (flags & 1) != 0;
                     layerMask.disabled = (flags & 2) != 0;
                     layerMask.invertLayerMaskWhenBlending = (flags & 4) != 0;
-                    const bool hasMaskParameters = (flags & 8) != 0;
+                    const bool hasMaskParameters = (flags & 16) != 0;
 
                     dbgFile << "\t\tLayer mask info (real): position relative" << layerMask.positionedRelativeToLayer
                             << ", disabled" << layerMask.disabled << ", invert" << layerMask.invertLayerMaskWhenBlending

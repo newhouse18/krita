@@ -132,6 +132,12 @@ KisImportExportErrorCode PSDLoader::decode(QIODevice &io)
         }
     }
 
+    // CONCEPTFORGE: a 16-bit RGB file without a profile is in Photoshop's working space (sRGB, with its curve), not in the linear profile
+    // Krita would pick for 16 bits: the picture came out lighter (patch 30)
+    if (!profile && colorSpaceId.first == RGBAColorModelID.id() && colorSpaceId.second == Integer16BitsColorDepthID.id()) {
+        profile = KoColorSpaceRegistry::instance()->p709SRGBProfile();
+    }
+
     // Create the colorspace
     const KoColorSpace* cs = KoColorSpaceRegistry::instance()->colorSpace(colorSpaceId.first, colorSpaceId.second, profile);
     if (!cs) {
@@ -579,7 +585,9 @@ KisImportExportErrorCode PSDLoader::decode(QIODevice &io)
                 }
                 bool hasVectorMask = vectorMask->pointCount() > 0 && layerRecord->infoBlocks.vectorMask.path.subPaths.size() > 0;
                 if (fillLayer) {
-                    if (!layerRecord->readMask(io, fillLayer->paintDevice(), channelInfo)) {
+                    // CONCEPTFORGE: the layer mask of a fill layer is the layer's own selection (what the generator is clipped to), not the generated
+                    // picture: reading it into paintDevice() lost the mask the first time the fill was regenerated (patch 30)
+                    if (!layerRecord->readMask(io, fillLayer->internalSelection()->pixelSelection(), channelInfo)) {
                         dbgFile << "failed reading masks for generator layer: " << layerRecord->layerName << layerRecord->error;
                     }
                     if (hasVectorMask) {
