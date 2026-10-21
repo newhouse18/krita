@@ -124,7 +124,7 @@ struct Extras
         return 1.0 + 0.75 * tiltSize * std::sin(lean * M_PI / 180.0);
     }
 
-    // Pen Tilt on a bristle tip (lab 5): the bristles' footprint stretches the way the pen leans, by 1 + 0.03 per degree of lean across the stroke, 1.6 times that along it (2.2 times at 40 degrees across; the
+    // Pen Tilt on a bristle tip (lab 5): the bristles' footprint stretches the way the pen leans, by 1 + 0.036 per degree of lean across the stroke, 1.3 times that along it (2.4 times at 40 degrees across; the
     // tilt scale of the brush did not matter), the stroke getting that much wider across, or longer along, the stroke
     static double bristleTiltStretch(const KisPaintInformation &info, double *direction = nullptr)
     {
@@ -132,7 +132,7 @@ struct Extras
         const double lean = qMin(90.0, std::sqrt(info.xTilt() * info.xTilt() + info.yTilt() * info.yTilt()));
         const double dir = std::atan2(info.yTilt(), info.xTilt());
         if (direction) *direction = dir;
-        return 1.0 + 0.03 * lean * (1.0 + 0.6 * std::cos(dir) * std::cos(dir));   // leaning along the stroke lengthens it half again as much
+        return 1.0 + 0.036 * lean * (1.0 + 0.3 * std::cos(dir) * std::cos(dir));   // leaning along the stroke lengthens it a third more
     }
 
     // Pen Tilt on the angle (patch 28): the long axis of the tip stands across the direction the pen leans (leaning right makes it
@@ -253,6 +253,7 @@ struct Extras
         count *= sh.dots / 30.0 * std::pow(widen, 1.3);   // the dots grow with the area, but Photoshop's soft bristles stay sparser than that
         count *= spacing <= 0.05 ? 1.0 : spacing <= 0.25 ? 1.0 - (spacing - 0.05) / 0.2 * 0.5 : spacing <= 1.0 ? 0.5 + (spacing - 0.25) / 0.75 * 0.25 : 0.75;   // fewer dots at a wide spacing (lab 4)
         count *= 1.0 + 0.3 * qBound(0.0, (0.25 - spacing) / 0.2, 1.0);   // a close spacing: more dots than the table says, the dabs being fewer than Photoshop's (lab 4)
+        count *= std::sqrt(tiltStretch);   // a stretched footprint has more bristles in it
         count = qMin(count, 1500.0);
         int dots = int(count) + (rng->generateDouble() < count - int(count) ? 1 : 0);
         // a soft fountain pen: a fixed set of bristles, each a line that swings across the stroke (the dab number is the place along the stroke)
