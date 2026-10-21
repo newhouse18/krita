@@ -161,7 +161,7 @@ struct Extras
     // 70 percent a little, 85 percent none). Photoshop's bristles are lines that wander across the stroke in slow waves; the middle stays solid.
     static double bristleSwingAmp(double stiffness)
     {
-        static const double table[][2] = {{0.1, 0.0}, {0.25, 1.8}, {0.5, 1.1}, {0.7, 0.4}, {0.8, 0.0}};
+        static const double table[][2] = {{0.1, 0.0}, {0.25, 1.8}, {0.5, 1.3}, {0.7, 0.55}, {0.8, 0.0}};
         if (stiffness <= table[0][0]) return 0.0;
         for (int i = 1; i < 5; ++i) {
             if (stiffness <= table[i][0]) {
@@ -202,7 +202,7 @@ struct Extras
             {0.520, 11.0, 3.3, 0.25, false},  // 6
             {0.318, 6.6, 1.7, 0.21, true},    // 7
             {0.473, 6.5, 1.8, 0.17, true},    // 8
-            {1.350, 55.0, 4.1, 0.69, true},   // 9
+            {1.350, 78.0, 4.1, 0.69, true},   // 9
         };
         return table[qBound(0, shape, 9)];
     }
@@ -279,7 +279,7 @@ struct Extras
                     const double common = std::sin(2.0 * M_PI * along / 9.0 + 1.3) * (unit(19u) < 0.5 ? 1.0 : -1.0);
                     const double wave = 0.55 * common + 0.45 * std::sin(2.0 * M_PI * along / (6.0 + 6.0 * unit(14u)) + 6.2832 * unit(15u));
                     lateral = (2.0 * unit(18u) - 1.0) * 0.25 * size + amp * (0.35 + 0.65 * wave) * (unit(19u) < 0.5 ? 1.0 : -1.0);
-                    dotAlpha = 0.5;
+                    dotAlpha = 0.62;
                 }
                 lateral = qBound(-0.95 * qMin(cx, cy), lateral, 0.95 * qMin(cx, cy));
                 x += lateral * std::cos(across);
