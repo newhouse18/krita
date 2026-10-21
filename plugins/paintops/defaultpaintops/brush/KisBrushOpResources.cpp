@@ -100,6 +100,9 @@ KisBrushOpResources::KisBrushOpResources(const KisPaintOpSettingsSP settings, Ki
     cfNoise = 0.0;
     cfBristle = qBound(0.0, settings->getDouble("Cf/Bristle/Density", 0.0), 1.0);   // CONCEPTFORGE: patch 29
     cfBristleThickness = qBound(0.0, settings->getDouble("Cf/Bristle/Thickness", 0.0), 1.0);
+    cfBristleSpacing = qBound(0.001, settings->getDouble("Cf/Bristle/Spacing", 0.02), 10.0);
+    cfBristleShape = qBound(0, settings->getInt("Cf/Bristle/Shape", 0), 9);
+    cfBristleStiffness = qBound(0.0, settings->getDouble("Cf/Bristle/Stiffness", 0.85), 1.0);
 
     textureOption.reset(new KisTextureOption(settings.data(),
                                              settings->resourcesInterface(),

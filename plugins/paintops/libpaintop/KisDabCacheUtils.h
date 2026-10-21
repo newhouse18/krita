@@ -47,6 +47,9 @@ struct PAINTOP_EXPORT DabRenderingResources
     qreal cfNoise {0.0};  // CONCEPTFORGE: Photoshop's Noise (patch 17), 0 = off
     qreal cfBristle {0.0};            // CONCEPTFORGE: Photoshop's bristle tip (patch 29): the bristle density, 0 = off
     qreal cfBristleThickness {0.0};   // and the bristle thickness
+    qreal cfBristleSpacing {0.02};    // and the brush's spacing, a share of its size
+    int cfBristleShape {0};           // Photoshop's bristle shape 0 to 9
+    qreal cfBristleStiffness {0.85};  // and its stiffness
 
     KisPaintDeviceSP colorSourceDevice;
 

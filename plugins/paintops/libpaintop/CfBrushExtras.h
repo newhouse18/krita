@@ -40,6 +40,7 @@ struct Extras
     double psMixRoundness {-1.0};
     bool tiltAngle {false};      // the angle follows the direction of the pen's tilt (Photoshop's Pen Tilt on Angle, patch 28)
     double tiltSize {0.0};       // > 0: the size grows with the pen's tilt, by this share of Photoshop's amount (Pen Tilt on Size, patch 28)
+    double bristleScale {1.0};  // a bristle tip's dab is drawn this many times bigger than the tip, for the dots (patch 29)
     double softScale {1.0};      // the tip's mask is drawn this much bigger than its size: Photoshop's soft tips reach past it (patch 26)
     QString countControl;        // "", pressure, tangentialpressure, tiltelevation, rotation, drawingangle, fade
     int countSteps {25};         // the steps of the fade control
@@ -66,6 +67,10 @@ struct Extras
         if (s->hasProperty("Cf/PsMix/Size")) e.psMixSize = qBound(0.0, s->getDouble("Cf/PsMix/Size", 0.0), 1.0);
         if (s->hasProperty("Cf/PsMix/Roundness")) e.psMixRoundness = qBound(0.0, s->getDouble("Cf/PsMix/Roundness", 0.0), 1.0);
         e.tiltAngle = s->getBool("Cf/Tilt/Angle", false);
+        if (s->getDouble("Cf/Bristle/Density", 0.0) > 0.0) {
+            e.bristleScale = bristleExtent(qBound(0, s->getInt("Cf/Bristle/Shape", 0), 9), qBound(0.0, s->getDouble("Cf/Bristle/Stiffness", 0.85), 1.0),
+                                            qBound(0.001, s->getDouble("Cf/Bristle/Spacing", 0.02), 10.0));
+        }
         e.tiltSize = qMax(0.0, s->getDouble("Cf/Tilt/Size", 0.0));
         e.softScale = qBound(1.0, s->getDouble("Cf/SoftScale", 1.0), 3.0);
         e.countControl = s->getString("Cf/ScatterCountControl", QString());
@@ -126,20 +131,87 @@ struct Extras
         return std::atan2(info.xTilt(), info.yTilt());
     }
 
+    // the gathering of the dots at a wide spacing (lab 4: clusters 14 pixels tall at a spacing of 100 percent, 16 at 25, against 28 at 2)
+    static double bristleGather(double spacing)
+    {
+        return spacing <= 0.05 ? 1.0 : spacing <= 0.25 ? 1.0 - (spacing - 0.05) / 0.2 * 0.4 : spacing <= 1.0 ? 0.6 - (spacing - 0.25) / 0.75 * 0.15 : 0.45;
+    }
+
+    // How many times the tip's size the dab has to be drawn so that the dots fit (a soft or wide-spread bristle brush reaches far past its size)
+    static double bristleExtent(int shape, double stiffness, double spacing)
+    {
+        return qBound(1.0, 2.0 * bristleShape(shape).spread * bristleStiffnessSpread(stiffness) * bristleGather(spacing) + 0.12, 8.0);
+    }
+
     // Photoshop's bristle tip (patch 29), fitted to its own strokes (lab 4): a dab is a handful of tiny dots at random places in a disc, and the
     // stroke is the many dabs laid over one another, so the middle is solid and the edge ragged. The disc is 0.47 of the size across, a dab has about
     // 40 dots at a bristle density of 31 percent (fewer, as the 1.3 power of the density), each 1.6 pixels at size 60 (more with the bristle thickness,
     // and the square root of the size), and one dot is always in the middle (the dark line of a sparse brush). Replaces the dab's opacity.
-    static void applyBristles(KisFixedPaintDeviceSP dab, double density, double thickness)
+    static inline quint32 bristleHash(quint32 a, quint32 b)
+    {
+        quint32 x = a * 0x9E3779B1u ^ (b + 0x7F4A7C15u) * 0x85EBCA6Bu;
+        x ^= x >> 15; x *= 0x2C1B3C6Du; x ^= x >> 12; x *= 0x297A2D39u; x ^= x >> 15;
+        return x;
+    }
+
+    // What the ten bristle shapes of Photoshop do to the dots (fitted to its strokes at size 60, density 31, lab 4): the spread (a share of the size), the
+    // dots per dab, how many dabs a dot stays put (a long stay draws a track), the dots' opacity and whether they lie in a row across the stroke ("line")
+    // or fill a disc. Shape 0 is the fountain pen's.
+    struct BristleShape
+    {
+        double spread, dots, stay, alpha;
+        bool line;
+    };
+    static BristleShape bristleShape(int shape)
+    {
+        static const BristleShape table[] = {
+            {0.222, 30.0, 3.0, 1.0, false},   // 0
+            {0.442, 5.2, 2.1, 0.48, true},    // 1
+            {0.447, 5.3, 3.1, 0.31, false},   // 2
+            {0.317, 5.1, 26.0, 0.23, false},  // 3
+            {0.750, 16.0, 4.1, 0.72, true},   // 4
+            {0.258, 24.5, 36.0, 1.0, false},  // 5
+            {0.520, 11.0, 3.3, 0.25, false},  // 6
+            {0.318, 6.6, 1.7, 0.21, true},    // 7
+            {0.473, 6.5, 1.8, 0.17, true},    // 8
+            {1.350, 55.0, 4.1, 0.69, true},   // 9
+        };
+        return table[qBound(0, shape, 9)];
+    }
+
+    // How much wider Photoshop's bristles spread by their stiffness (lab 4, the width of the stroke far from its start against the 28 pixels at 85 percent):
+    // 100 percent is stiff and narrow, softer ones splay; a stiffness of 0 is a solid disc of about the size. Its start-up swings are not modelled.
+    static double bristleStiffnessSpread(double stiffness)
+    {
+        static const double table[][2] = {{0.0, 2.1}, {0.05, 2.1}, {0.25, 7.0}, {0.5, 4.6}, {0.7, 2.2}, {0.85, 1.0}, {1.0, 0.6}};
+        if (stiffness <= table[0][0]) return table[0][1];
+        for (int i = 1; i < 7; ++i) {
+            if (stiffness <= table[i][0]) {
+                return table[i - 1][1] + (stiffness - table[i - 1][0]) / (table[i][0] - table[i - 1][0]) * (table[i][1] - table[i - 1][1]);
+            }
+        }
+        return table[6][1];
+    }
+
+    // Photoshop's bristle tip (patch 29), fitted to its own strokes (lab 4): a dab is a handful of tiny dots at random places, the stroke is the many dabs
+    // laid over one another, so the middle is solid and the edge ragged. The dots by bristle density, the spread by shape and stiffness: see above and
+    // docs/spikes/ps-lab.md. The dots are the same for a few dabs (hash of the dab number), so each draws a short dash along the stroke, and a wide spacing
+    // gathers them. One dot is always in the middle (the dark line of a sparse brush). Replaces the dab's opacity.
+    static void applyBristles(KisFixedPaintDeviceSP dab, double density, double thickness, int dabSeqNo = 0, double spacing = 0.02, int shape = 0,
+                              double stiffness = 0.85, double direction = 0.0)
     {
         if (!dab || density <= 0.0) return;
         const QRect bounds = dab->bounds();
         const int w = bounds.width(), h = bounds.height();
         if (w < 2 || h < 2) return;
-        const double size = qMax(w, h) / 1.05;
-        const double radius = 0.222 * size;
+        const BristleShape sh = bristleShape(shape);
+        const double size = qMax(w, h) / 1.05 / bristleExtent(shape, stiffness, spacing);   // the tip's size, the dab being drawn bigger when the dots need room
+        const double widen = bristleStiffnessSpread(stiffness);
+        const double gather = bristleGather(spacing);
+        const double radius = sh.spread * size * gather * widen;
         const double diameter = (1.6 + 5.4 * qBound(0.0, thickness, 1.0)) * std::sqrt(size / 60.0);
         QRandomGenerator *rng = QRandomGenerator::global();
+        const int lifetime = qMax(1, int(sh.stay + 0.5));   // dabs a dot stays where it is
         // the dots per dab by bristle density, from Photoshop's strokes at densities 5, 15, 31, 60 and 100 (the stroke gets solid quicker than the count grows)
         static const double table[][2] = {{0.0, 0.0}, {0.05, 3.8}, {0.15, 12.0}, {0.31, 30.0}, {0.6, 48.0}, {1.0, 60.0}};
         double count = table[5][1];
@@ -149,22 +221,39 @@ struct Extras
                 break;
             }
         }
+        count *= sh.dots / 30.0 * std::pow(widen, 1.3);   // the dots grow with the area, but Photoshop's soft bristles stay sparser than that
+        count *= spacing <= 0.05 ? 1.0 : spacing <= 0.25 ? 1.0 - (spacing - 0.05) / 0.2 * 0.5 : spacing <= 1.0 ? 0.5 + (spacing - 0.25) / 0.75 * 0.25 : 0.75;   // fewer dots at a wide spacing (lab 4)
+        count *= 1.0 + 0.3 * qBound(0.0, (0.25 - spacing) / 0.2, 1.0);   // a close spacing: more dots than the table says, the dabs being fewer than Photoshop's (lab 4)
+        count = qMin(count, 1500.0);
         int dots = int(count) + (rng->generateDouble() < count - int(count) ? 1 : 0);
         std::vector<float> keep(size_t(w) * h, 1.0f);   // what is left of the dab's transparency: the product of (1 - the dots' opacity)
         const double cx = w / 2.0, cy = h / 2.0, reach = diameter / 2.0 + 1.0;
-        for (int k = 0; k <= dots; ++k) {
+        const double across = direction + M_PI / 2.0;   // a row of bristles lies across the stroke
+        for (int k = (shape == 0 ? 0 : 1); k <= dots; ++k) {   // the first dot is the middle one, of the fountain pen's shape only
             double x = cx, y = cy;
-            if (k > 0) {   // the first dot is the middle one
-                const double a = 2.0 * M_PI * rng->generateDouble(), r = radius * std::pow(rng->generateDouble(), 0.6);   // a little more of them near the middle
-                x += r * std::cos(a);
-                y += r * std::sin(a);
+            double dotAlpha = 1.0;
+            if (k > 0) {
+                const quint32 phase = bristleHash(quint32(k), 77u) % quint32(lifetime);
+                const quint32 segment = quint32((dabSeqNo + int(phase)) / lifetime);
+                const quint32 hs = bristleHash(quint32(k), segment);
+                if (sh.line) {
+                    const double t = radius * (2.0 * (bristleHash(hs, 1u) / 4294967296.0) - 1.0);
+                    x += t * std::cos(across);
+                    y += t * std::sin(across);
+                } else {
+                    const double a = 2.0 * M_PI * (bristleHash(hs, 1u) / 4294967296.0);
+                    const double r = radius * std::pow(bristleHash(hs, 2u) / 4294967296.0, 0.6);   // a little more of them near the middle
+                    x += r * std::cos(a);
+                    y += r * std::sin(a);
+                }
+                dotAlpha = sh.alpha;
             }
             const int x0 = qMax(0, int(x - reach)), x1 = qMin(w - 1, int(x + reach)), y0 = qMax(0, int(y - reach)), y1 = qMin(h - 1, int(y + reach));
             for (int py = y0; py <= y1; ++py) {
                 for (int px = x0; px <= x1; ++px) {
                     const double dist = std::sqrt((px + 0.5 - x) * (px + 0.5 - x) + (py + 0.5 - y) * (py + 0.5 - y));
                     const double a = qBound(0.0, diameter / 2.0 + 0.5 - dist, 1.0);
-                    if (a > 0.0) keep[size_t(py) * w + px] *= float(1.0 - qMin(a, 0.999));
+                    if (a > 0.0) keep[size_t(py) * w + px] *= float(1.0 - qMin(a * dotAlpha, 0.999));
                 }
             }
         }

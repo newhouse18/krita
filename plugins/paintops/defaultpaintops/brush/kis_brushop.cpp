@@ -124,6 +124,8 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
     qreal scale = m_sizeOption.apply(info);
     if (m_cf.psMixSize >= 0.0) scale = m_cf.psMixSize + (1.0 - m_cf.psMixSize) * scale;   // CONCEPTFORGE: patch 27
     scale *= m_cf.tiltSizeFactor(info);   // CONCEPTFORGE: patch 28
+    const qreal bristleless = scale;   // the tip's size without the room a bristle tip's dots need (the spacing counts the size)
+    scale *= m_cf.bristleScale;          // CONCEPTFORGE: patch 29
     scale *= KisLodTransform::lodToScale(painter()->device());
     if (checkSizeTooSmall(scale)) return KisSpacingInformation();
 
@@ -179,7 +181,7 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
 
 
     KisSpacingInformation spacingInfo =
-        effectiveSpacing(scale, rotation, &m_airbrushData, &m_spacingOption, info);
+        effectiveSpacing(bristleless * KisLodTransform::lodToScale(painter()->device()), rotation, &m_airbrushData, &m_spacingOption, info);
 
     // gather statistics about dabs
     m_avgSpacing(spacingInfo.scalarApprox());
