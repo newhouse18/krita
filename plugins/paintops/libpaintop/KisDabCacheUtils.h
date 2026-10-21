@@ -50,6 +50,7 @@ struct PAINTOP_EXPORT DabRenderingResources
     qreal cfBristleSpacing {0.02};    // and the brush's spacing, a share of its size
     int cfBristleShape {0};           // Photoshop's bristle shape 0 to 9
     qreal cfBristleStiffness {0.85};  // and its stiffness
+    bool cfBristleTilt {false};       // and whether the pen's tilt stretches it
 
     KisPaintDeviceSP colorSourceDevice;
 

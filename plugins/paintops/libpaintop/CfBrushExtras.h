@@ -39,6 +39,7 @@ struct Extras
     double psMixSize {-1.0};     // >= 0: size = this + (1 - this) * (the size curves' product), Photoshop's minimum with jitter and a control (patch 27)
     double psMixRoundness {-1.0};
     bool tiltAngle {false};      // the angle follows the direction of the pen's tilt (Photoshop's Pen Tilt on Angle, patch 28)
+    bool bristle {false};        // a bristle tip (patch 29)
     double tiltSize {0.0};       // > 0: the size grows with the pen's tilt, by this share of Photoshop's amount (Pen Tilt on Size, patch 28)
     double bristleScale {1.0};  // a bristle tip's dab is drawn this many times bigger than the tip, for the dots (patch 29)
     double softScale {1.0};      // the tip's mask is drawn this much bigger than its size: Photoshop's soft tips reach past it (patch 26)
@@ -67,6 +68,7 @@ struct Extras
         if (s->hasProperty("Cf/PsMix/Size")) e.psMixSize = qBound(0.0, s->getDouble("Cf/PsMix/Size", 0.0), 1.0);
         if (s->hasProperty("Cf/PsMix/Roundness")) e.psMixRoundness = qBound(0.0, s->getDouble("Cf/PsMix/Roundness", 0.0), 1.0);
         e.tiltAngle = s->getBool("Cf/Tilt/Angle", false);
+        e.bristle = s->getDouble("Cf/Bristle/Density", 0.0) > 0.0;
         if (s->getDouble("Cf/Bristle/Density", 0.0) > 0.0) {
             e.bristleScale = bristleExtent(qBound(0, s->getInt("Cf/Bristle/Shape", 0), 9), qBound(0.0, s->getDouble("Cf/Bristle/Stiffness", 0.85), 1.0),
                                             qBound(0.001, s->getDouble("Cf/Bristle/Spacing", 0.02), 10.0));
@@ -117,9 +119,20 @@ struct Extras
     // 1 + 0.75 sin(lean), the lean being the length of the two tilts in degrees
     qreal tiltSizeFactor(const KisPaintInformation &info) const
     {
-        if (tiltSize <= 0.0 || info.isHoveringMode()) return 1.0;
+        if (tiltSize <= 0.0 || info.isHoveringMode() || bristle) return 1.0;   // a bristle tip stretches instead
         const qreal lean = qMin(90.0, std::sqrt(info.xTilt() * info.xTilt() + info.yTilt() * info.yTilt()));
         return 1.0 + 0.75 * tiltSize * std::sin(lean * M_PI / 180.0);
+    }
+
+    // Pen Tilt on a bristle tip (lab 5): the bristles' footprint stretches the way the pen leans, by 1 + 0.03 per degree of lean across the stroke, 1.6 times that along it (2.2 times at 40 degrees across; the
+    // tilt scale of the brush did not matter), the stroke getting that much wider across, or longer along, the stroke
+    static double bristleTiltStretch(const KisPaintInformation &info, double *direction = nullptr)
+    {
+        if (info.isHoveringMode()) return 1.0;
+        const double lean = qMin(90.0, std::sqrt(info.xTilt() * info.xTilt() + info.yTilt() * info.yTilt()));
+        const double dir = std::atan2(info.yTilt(), info.xTilt());
+        if (direction) *direction = dir;
+        return 1.0 + 0.03 * lean * (1.0 + 0.6 * std::cos(dir) * std::cos(dir));   // leaning along the stroke lengthens it half again as much
     }
 
     // Pen Tilt on the angle (patch 28): the long axis of the tip stands across the direction the pen leans (leaning right makes it
@@ -184,7 +197,7 @@ struct Extras
             {0.442, 5.2, 2.1, 0.48, true},    // 1
             {0.447, 5.3, 3.1, 0.31, false},   // 2
             {0.317, 5.1, 26.0, 0.23, false},  // 3
-            {0.750, 16.0, 4.1, 0.72, true},   // 4
+            {0.750, 30.0, 6.0, 0.72, true},   // 4
             {0.258, 24.5, 36.0, 1.0, false},  // 5
             {0.520, 11.0, 3.3, 0.25, false},  // 6
             {0.318, 6.6, 1.7, 0.21, true},    // 7
@@ -213,14 +226,14 @@ struct Extras
     // docs/spikes/ps-lab.md. The dots are the same for a few dabs (hash of the dab number), so each draws a short dash along the stroke, and a wide spacing
     // gathers them. One dot is always in the middle (the dark line of a sparse brush). Replaces the dab's opacity.
     static void applyBristles(KisFixedPaintDeviceSP dab, double density, double thickness, int dabSeqNo = 0, double spacing = 0.02, int shape = 0,
-                              double stiffness = 0.85, double direction = 0.0)
+                              double stiffness = 0.85, double direction = 0.0, double tiltStretch = 1.0, double tiltDirection = 0.0)
     {
         if (!dab || density <= 0.0) return;
         const QRect bounds = dab->bounds();
         const int w = bounds.width(), h = bounds.height();
         if (w < 2 || h < 2) return;
         const BristleShape sh = bristleShape(shape);
-        const double size = qMax(w, h) / 1.05 / bristleExtent(shape, stiffness, spacing);   // the tip's size, the dab being drawn bigger when the dots need room
+        const double size = qMax(w, h) / 1.05 / bristleExtent(shape, stiffness, spacing) / tiltStretch;   // the tip's size, the dab being drawn bigger when the dots need room
         const double widen = bristleStiffnessSpread(stiffness);
         const double gather = bristleGather(spacing);
         const double radius = sh.spread * size * gather * widen;
@@ -285,6 +298,12 @@ struct Extras
                     y += r * std::sin(a);
                 }
                 dotAlpha = sh.alpha;
+            }
+            if (tiltStretch > 1.0) {   // the pen's lean stretches the footprint along the lean
+                const double dx = x - cx, dy = y - cy;
+                const double along = (dx * std::cos(tiltDirection) + dy * std::sin(tiltDirection)) * (tiltStretch - 1.0);
+                x = qBound(reach, x + along * std::cos(tiltDirection), w - reach);
+                y = qBound(reach, y + along * std::sin(tiltDirection), h - reach);
             }
             const int x0 = qMax(0, int(x - reach)), x1 = qMin(w - 1, int(x + reach)), y0 = qMax(0, int(y - reach)), y1 = qMin(h - 1, int(y + reach));
             for (int py = y0; py <= y1; ++py) {

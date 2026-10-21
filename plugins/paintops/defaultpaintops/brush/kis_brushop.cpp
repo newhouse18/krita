@@ -9,6 +9,7 @@
  *  SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+#include <QFile>
 #include "kis_brushop.h"
 
 #include <QRect>
@@ -126,6 +127,7 @@ KisSpacingInformation KisBrushOp::paintAt(const KisPaintInformation& infoIn)
     scale *= m_cf.tiltSizeFactor(info);   // CONCEPTFORGE: patch 28
     const qreal bristleless = scale;   // the tip's size without the room a bristle tip's dots need (the spacing counts the size)
     scale *= m_cf.bristleScale;          // CONCEPTFORGE: patch 29
+    if (m_cf.bristle && m_cf.tiltSize > 0.0) scale *= CfBrushExtras::Extras::bristleTiltStretch(info);   // the pen's lean stretches the dots' room
     scale *= KisLodTransform::lodToScale(painter()->device());
     if (checkSizeTooSmall(scale)) return KisSpacingInformation();
 

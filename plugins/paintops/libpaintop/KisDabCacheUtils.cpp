@@ -106,8 +106,10 @@ void postProcessDab(KisFixedPaintDeviceSP dab,
 
     // CONCEPTFORGE: a bristle tip's dots (patch 29)
     if (resources->cfBristle > 0.0) {
+        double tiltDirection = 0.0;
+        const double tiltStretch = resources->cfBristleTilt ? CfBrushExtras::Extras::bristleTiltStretch(info, &tiltDirection) : 1.0;
         CfBrushExtras::Extras::applyBristles(dab, resources->cfBristle, resources->cfBristleThickness, info.currentDabSeqNo(), resources->cfBristleSpacing,
-                                                  resources->cfBristleShape, resources->cfBristleStiffness, info.drawingAngle());
+                                                  resources->cfBristleShape, resources->cfBristleStiffness, info.drawingAngle(), tiltStretch, tiltDirection);
     }
 
     // CONCEPTFORGE: Noise (patch 17)
