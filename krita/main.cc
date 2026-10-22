@@ -710,6 +710,16 @@ if (!qEnvironmentVariableIsEmpty("KRITA_OPENGL_DEBUG")) {
 
     KLocalizedString::setApplicationDomain("krita");
 
+    // CONCEPTFORGE: English with our own name. share/locale/en_CF holds every text that says "Krita" with "Concept Forge" in its place
+    // (tools/make_english_catalog.py); it goes first when the interface language is English
+    {
+        QStringList conceptForgeLanguages = KLocalizedString::languages();
+        if (conceptForgeLanguages.isEmpty() || conceptForgeLanguages.first().startsWith(QStringLiteral("en"))) {
+            conceptForgeLanguages.prepend(QStringLiteral("en_CF"));
+            KLocalizedString::setLanguages(conceptForgeLanguages);
+        }
+    }
+
     dbgLocale << "Available translations" << KLocalizedString::availableApplicationTranslations();
     dbgLocale << "Available domain translations" << KLocalizedString::availableDomainTranslations("krita");
 

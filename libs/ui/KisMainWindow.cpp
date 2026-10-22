@@ -376,7 +376,7 @@ KisMainWindow::KisMainWindow(QUuid uuid)
     d->viewManager = new KisViewManager(this, actionCollection());
     KConfigGroup group( KSharedConfig::openConfig(), "theme");
 #ifndef Q_OS_HAIKU
-    d->themeManager = new Digikam::ThemeManager(group.readEntry("Theme", "Photoshop Dark"), this);
+    d->themeManager = new Digikam::ThemeManager(group.readEntry("Theme", "Concept Forge"), this);
 #endif
     d->windowStateConfig = KSharedConfig::openConfig()->group("MainWindow");
 
@@ -2910,7 +2910,7 @@ void KisMainWindow::configChanged()
 
     KConfigGroup group( KSharedConfig::openConfig(), "theme");
 #ifndef Q_OS_HAIKU
-    d->themeManager->setCurrentTheme(group.readEntry("Theme", "Photoshop Dark"));
+    d->themeManager->setCurrentTheme(group.readEntry("Theme", "Concept Forge"));
 #endif
     d->actionManager()->updateGUI();
 
