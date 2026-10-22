@@ -103,8 +103,8 @@ ForegroundPositive=151,202,64
 ForegroundVisited=160,160,160
 
 [General]
-ColorScheme=Krita dark
-Name=Krita dark
+ColorScheme=Concept Forge dark
+Name=Concept Forge dark
 shadeSortColumn=true
 
 [KDE]
