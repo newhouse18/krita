@@ -392,6 +392,13 @@ void KisWelcomePageWidget::slotUpdateThemeColors()
     updateVersionUpdaterFrame(); // updater frame
 #endif
 
+    // CONCEPTFORGE: a private tool: no donation or Krita marketing links on the welcome page
+    supportKritaLink->hide();
+    supportKritaIcon->hide();
+    labelSupportText->hide();
+    kritaWebsiteLink->hide();
+    kritaWebsiteIcon->hide();
+
 #ifdef Q_OS_MACOS
     // macOS store version should not contain external links containing donation buttons or forms
     if (KisMacosEntitlements().sandbox()) {

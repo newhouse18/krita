@@ -715,8 +715,9 @@ if (!qEnvironmentVariableIsEmpty("KRITA_OPENGL_DEBUG")) {
 
     /// Initialize application info, it will be used by both, Qt and
     /// DrKonqi of the host system
+    // CONCEPTFORGE: the display name only; the component name stays "krita" so folders, plugins and settings keep their places
     KAboutData aboutData("krita",
-                            "Krita",
+                            "Concept Forge",
                             KritaVersionWrapper::versionString(true),
                             "", // TODO: "short description" needs new string exception
                             KAboutLicense::GPL,
