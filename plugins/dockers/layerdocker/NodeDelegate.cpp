@@ -1068,7 +1068,12 @@ bool NodeDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const Q
                 OptionalProperty clickedProperty = d->findVisibilityProperty(props);
                 if (!clickedProperty) return false;
 
-                d->toggleProperty(props, clickedProperty, mouseEvent->modifiers(), index);
+                // CONCEPTFORGE: Photoshop's Alt-click on the eye shows only this layer; in Krita that is Shift-click, so Alt does the same
+                Qt::KeyboardModifiers modifiers = mouseEvent->modifiers();
+                if (modifiers & Qt::AltModifier) {
+                    modifiers = (modifiers & ~Qt::KeyboardModifiers(Qt::AltModifier)) | Qt::ShiftModifier;
+                }
+                d->toggleProperty(props, clickedProperty, modifiers, index);
 
                 return true;
             }

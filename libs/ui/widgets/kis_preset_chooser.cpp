@@ -192,7 +192,7 @@ KisPresetChooser::KisPresetChooser(QWidget *parent)
 
     connect(m_chooser, &KisResourceItemChooser::listViewModeChanged, this, &KisPresetChooser::showHideBrushNames);
 
-    m_mode = ViewMode::THUMBNAIL;
+    m_mode = ViewMode::DETAIL;   // CONCEPTFORGE: a list with names, like Photoshop's Brushes panel, until the artist picks thumbnails
 
     connect(KisConfigNotifier::instance(), SIGNAL(configChanged()),
             SLOT(notifyConfigChanged()));
